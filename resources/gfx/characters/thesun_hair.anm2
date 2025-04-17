@@ -1,5 +1,5 @@
 <AnimatedActor>
-	<Info CreatedBy="gabymorgi"" CreatedOn="15/4/2025 9:36:02 PM" Version="115" Fps="30"/>
+	<Info CreatedBy="gabymorgi" CreatedOn="15/4/2025 9:36:02 PM" Version="115" Fps="30"/>
 	<Content>
 		<Spritesheets>
 			<Spritesheet Path="costumes\thesun hair.png" Id="0"/>

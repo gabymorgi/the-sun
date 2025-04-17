@@ -7,7 +7,7 @@
         keys="1"
         portrait="playerportrait_thesun.png"
         skinColor="-1"
-        items="178"
+        pocketActive="522"
     />
 
     <player name="Pluto"

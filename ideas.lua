@@ -2,7 +2,7 @@
 --[[ to disallow player to shoot
 content/players.xml
 set canShoot to false
-<player name="Gabriel" id="0" canShoot="false" variant="0" type="0" skin="0" />
+<player name="TheSun" id="0" canShoot="false" variant="0" type="0" skin="0" />
 
 -- to check if player is shooting, on post update:
 local ShootingInput = player:GetShootingInput()
