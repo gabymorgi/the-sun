@@ -1,5 +1,9 @@
 
---[[ to disallow player to shoot
+--[[ 
+
+Code extracted from other mods that I found useful
+
+-- to disallow player to shoot
 content/players.xml
 set canShoot to false
 <player name="TheSun" id="0" canShoot="false" variant="0" type="0" skin="0" />
@@ -37,5 +41,25 @@ local center = Game():GetRoom():GetCenterPos()
 local shape = Game():GetRoom():GetRoomShape()
 if shape == RoomShape.ROOMSHAPE_1x1 then Isaac.Spawn(809, 0, 0, Vector(center.X, center.Y - 96), Vector(0,0), p) end
 
+
+
+-- aim direction
+
+local DIRECTION_MAP = {
+		[Direction.UP] = DirectionVector.UP,
+		[Direction.LEFT] = DirectionVector.LEFT,
+		[Direction.DOWN] = DirectionVector.DOWN,
+		[Direction.RIGHT] = DirectionVector.RIGHT,
+		[Direction.NO_DIRECTION] = DirectionVector.RIGHT
+	}
+
+if playerSynergies.AnalogStick and not playerSynergies.TractorBeam then
+		-- Use the natural joystick direction
+		psychicPowers.aimDirection = player:GetAimDirection()
+	else
+		-- Set the aim direction vector based on the fire direction
+		psychicPowers.aimDirection = DIRECTION_MAP[player:GetFireDirection()]
+	end
 --]]
+
 

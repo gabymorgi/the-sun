@@ -240,5 +240,7 @@
 		"WispSubType",
 		"XMLData",
 		"XMLNode",
-		"REPENTOGON"
+		"REPENTOGON",
+        "debugTable",
+        "logValue"
 	]}
