@@ -60,6 +60,17 @@ if playerSynergies.AnalogStick and not playerSynergies.TractorBeam then
 		-- Set the aim direction vector based on the fire direction
 		psychicPowers.aimDirection = DIRECTION_MAP[player:GetFireDirection()]
 	end
---]]
+
+
+-- Handles the smaller J&E hitbox
+mod:AddCallback(ModCallbacks.MC_EVALUATE_CACHE, function(_, player, flag)
+	if player:GetPlayerType() == PlayerType.PLAYER_JACOB or player:GetPlayerType() == PlayerType.PLAYER_ESAU then
+		player.SizeMulti = (Vector(player.Size, player.Size) * 0.1) * 0.8;
+	end
+end, CacheFlag.CACHE_SIZE);
+
+
+
+	--]]
 
 
