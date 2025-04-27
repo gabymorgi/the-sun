@@ -70,7 +70,15 @@ mod:AddCallback(ModCallbacks.MC_EVALUATE_CACHE, function(_, player, flag)
 end, CacheFlag.CACHE_SIZE);
 
 
+velocidad angular fija
 
+check if tears with no enemy damage
+
+don't transform enemy tears
+
+proj should spawn from behind wañlls
+
+birds eyes doesnt work
 	--]]
 
 

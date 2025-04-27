@@ -9,9 +9,9 @@ local fireCooldown = 0
 --- @type { [number]: { tear: EntityTear, direction: number, radius: number, angle: number } }
 local orbitingTears = {}
 local orbitingTearsCount = 0
-local MIN_ORBITING_RADIUS = 10
+local MIN_ORBITING_RADIUS = 40
 local orbitingRadius = MIN_ORBITING_RADIUS
-local MAX_ORBITING_TEARS = 1
+local MAX_ORBITING_TEARS = 60
 local RADIUS_STEP_MULTIPLIER = 2
 local ANGLE_STEP_MULTIPLIER = 0.1
 
@@ -63,7 +63,7 @@ function theSunMod:onEvaluateCacheRange(player)
         return
     end
 
-    player.TearRange = player.TearRange / 2
+    player.TearRange = player.TearRange / 3
 end
 theSunMod:AddCallback(ModCallbacks.MC_EVALUATE_CACHE, theSunMod.onEvaluateCacheRange, CacheFlag.CACHE_RANGE)
 
@@ -135,8 +135,9 @@ local function FireFromWall(player)
     -- proj.ChangeTimeout(60)
     proj.FallingAccel = -0.1
     proj.Height = -10
-    -- proj.CollisionDamage = player.Damage
+    proj.CollisionDamage = player.Damage
     proj.Size = player.Damage
+    proj.Scale = 1.5907862186432 -- player.Damage / 5
 end
 
 --- @param playerPos Vector
@@ -146,7 +147,7 @@ local function IsProjectileBehindPlayer(playerPos, proj)
     local velocity = proj.Velocity:Normalized()
 
     -- 0 = side, 1 = back, -1 = front
-    return velocity:Dot(toProj) > 0.5
+    return velocity:Dot(toProj) > 0.1
 end
 
 --- @param playerPos Vector
@@ -168,27 +169,33 @@ end
 
 --- @param player EntityPlayer
 local function TryAbsorbTears(player)
-    local input = player:GetShootingInput()
-    if input:Length() == 0 then return end
+    -- local input = player:GetShootingInput()
+    -- if input:Length() == 0 then return end
 
     local radius = player.TearRange
-    local nearby = Isaac.FindInRadius(player.Position, player.TearRange, EntityPartition.BULLET)
+    -- logValue("radius", radius)
+    local nearby = Isaac.FindInRadius(player.Position, 80, EntityPartition.BULLET)
     for _, ent in ipairs(nearby) do
         local proj = ent:ToProjectile()
         if proj and IsProjectileBehindPlayer(player.Position, proj) then
-            logValue("orbitingTears", #orbitingTears)
+            -- logValue("orbitingTears", #orbitingTears)
             if orbitingTearsCount > MAX_ORBITING_TEARS then
                 proj:Remove()
                 return
             end
-            local tear = Isaac.Spawn(EntityType.ENTITY_TEAR, 0, 0, proj.Position, Vector.Zero, player):ToTear()
-            tear.CollisionDamage = 50 -- proj.CollisionDamage * 5
+            -- local tear = Isaac.Spawn(EntityType.ENTITY_TEAR, 0, 0, proj.Position, Vector.Zero, player):ToTear()
+            local tear = player:FireTear(proj.Position, Vector.Zero, true, false, false)
             proj:Remove() -- Eliminamos el proyectil para evitar daño
             if tear == nil then return end
             tear:AddTearFlags(TearFlags.TEAR_SPECTRAL)
             tear.FallingAcceleration = -0.1
-            tear.Height = -10
-            tear.Scale = player.Damage
+            tear.Height = -50
+            logValue("modified tear", {
+                Size = tear.Size,
+                SizeMulti = tear.SizeMulti,
+                Scale = tear.Scale,
+            })
+            -- tear.Scale = player.Damage
             orbitingTears[GetPtrHash(tear)] = {
                 tear = tear,
                 direction = GetClockWiseSign(player.Position, proj),
@@ -250,8 +257,8 @@ function theSunMod:OnUpdate()
             goto continue -- Skip to the next iteration of the loop if the player is not The Sun.
         end
 
+        TryAbsorbTears(player)
         if player:GetShootingInput():Length() > 0 then
-            TryAbsorbTears(player)
             if (orbitingRadius < player.TearRange) then
                 orbitingRadius = orbitingRadius + RADIUS_STEP_MULTIPLIER
             end
