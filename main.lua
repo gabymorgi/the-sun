@@ -1,3 +1,17 @@
+
+---@alias EntityOrbital EntityTear | EntityProjectile | EntityEffect
+
+---@class Orbital<T>: { entity: T }
+---@field direction number
+---@field radius number
+---@field angle number
+---@field expirationFrame number
+---@field bounced? boolean
+---@field rangeMultiplier? number
+
+---@class Dict<T>: { list: { [number]: T }, length: number, limit: number }
+---@alias WallDict { [number]: EntityProjectile }
+
 local log = require("log")
 
 local theSunMod = RegisterMod("The Sun Character Mod", 1)
@@ -9,37 +23,54 @@ local game = Game()
 local rng = RNG()
 local HALF_PI = math.pi / 2
 local TWO_PI = math.pi * 2
+local framesPerSecond = 25
 
----@class OrbitalTear
----@field tear EntityTear | EntityProjectile | EntityEffect
----@field direction number
----@field radius number
----@field angle number
----@field time number
----@field bounced? boolean
----@field rangeMultiplier? number
+local function newDict()
+  return {
+    list = {},
+    length = 0,
+    limit = 60,
+  }
+end
 
---- @type { [number]: OrbitalTear }
-local orbitingTears = {}
-local orbitingTearsCount = 0
---- @type { [number]: EntityProjectile }
+--- @type Dict<Orbital<EntityTear>>
+local orbitingTears = newDict()
+--- @type Dict<Orbital<EntityProjectile | EntityEffect>>
+local orbitingEntities = newDict()
+--- @type WallDict
 local wallProjectiles = {}
 local MIN_ORBITING_RADIUS = 40
 local orbitingRadius = MIN_ORBITING_RADIUS
-local MAX_ORBITING_TEARS = 60
-local MAX_ORBITING_PROJ = MAX_ORBITING_TEARS * 2
 local RADIUS_STEP_MULTIPLIER = 2
 local PROJECTILE_SPAWN_OFFSET = 40
 local GRID_SIZE = 40
 local PROJECTILE_DESPAWN_OFFSET = Vector(80, 80)
 local tearLifetime = 160
 local activeWizardEffectFrames = 0
-local framesPerSecond = 25
+
+--- helpers
+--- @type { [number]: EntityTear }
+local tearsToCheck = {}
+--- @type { [number]: EntityEffect }
+local effectToCheck = {}
 
 -- synergy variables
 
+---@type { Tear: EntityTear?, Multiplier: number, expirationFrames: number[], logActPointer: number }
+local ludo = {
+  Tear = nil,
+  BaseDamage = 3.5,
+  ExpirationFrames = {},
+  LogPointer = 0
+}
 local leadPencilCount = 0
 local friendlySpiderCount = 0
+local colorOffsets = {
+  Red = { colorOffset = { 0.61, -0.39, -0.39 }, rangeMultiplier = 0.63 },
+  Yellow = { colorOffset = { 0.54, 0.61, -0.4 }, rangeMultiplier = 0.88 },
+  Green = { colorOffset = { -0.4, 0.61, -0.26 }, rangeMultiplier = 1.13 },
+  Cyan = { colorOffset = { -0.39, 0.4, 0.61 }, rangeMultiplier = 1.38 },
+}
 
 local roomMultiplier = {
   [RoomShape.ROOMSHAPE_1x1] = 1,
@@ -55,22 +86,30 @@ local roomMultiplier = {
   [RoomShape.ROOMSHAPE_LBL] = 0.6,
   [RoomShape.ROOMSHAPE_LBR] = 0.6,
 }
-
 local roomDelay = 10
 local current = 0
-local wallDirection = 0
+local wallDirection = 0 -- 00 = left, 10 = right, 01 = top, 11 = down
 
--- 00 = left
--- 10 = right
--- 01 = top
--- 11 = down
 
-local colorOffsets = {
-  Red = { colorOffset = { 0.61, -0.39, -0.39 }, rangeMultiplier = 0.63 },
-  Yellow = { colorOffset = { 0.54, 0.61, -0.4 }, rangeMultiplier = 0.88 },
-  Green = { colorOffset = { -0.4, 0.61, -0.26 }, rangeMultiplier = 1.13 },
-  Cyan = { colorOffset = { -0.39, 0.4, 0.61 }, rangeMultiplier = 1.38 },
-}
+
+---@param entityType EntityType
+---@param variant number
+---@param spawnPos Vector
+---@param velocity Vector
+---@param player? EntityPlayer
+---@param subType? number
+---@param seed? number
+local function SpawnEntity(entityType, variant, spawnPos, velocity, player, subType, seed)
+  return game:Spawn(
+    entityType,
+    variant,
+    spawnPos,
+    velocity,
+    player,
+    subType or 0,
+    seed or game:GetRoom():GetSpawnSeed()
+  )
+end
 
 --- @param tear EntityTear
 local function GetColorOffset(tear)
@@ -171,6 +210,18 @@ local function GetPlayers()
   return players
 end
 
+---@param player EntityPlayer
+---@return Entity[]
+local function GetEnemiesInRange(player)
+  local enemies = {}
+  for _, entity in pairs(Isaac.FindInRadius(player.Position, 100, EntityPartition.ENEMY)) do
+    if entity:IsActiveEnemy() and entity:IsVulnerableEnemy() and not entity:HasEntityFlags(EntityFlag.FLAG_NO_TARGET) then
+      table.insert(enemies, entity)
+    end
+  end
+  return enemies
+end
+
 --- @param playerPos Vector
 --- @param proj Entity
 --- @return number
@@ -196,7 +247,19 @@ local function GetAngle(pos1, pos2)
 end
 
 --- @param player EntityPlayer
---- @param orb OrbitalTear
+local function GetMarkedTarget(player)
+	for _, entity in pairs(Isaac.FindByType(EntityType.ENTITY_EFFECT, EffectVariant.TARGET)) do
+		local spawner = entity.SpawnerEntity
+		
+		if spawner and GetPtrHash(spawner) == GetPtrHash(player) then
+			return entity:ToEffect()
+		end
+	end
+	return nil
+end
+
+--- @param player EntityPlayer
+--- @param orb Orbital<EntityOrbital>
 --- @param multiplier? number
 local function SpinOrbitingTear(player, orb, multiplier)
   local vel = player.ShotSpeed / math.sqrt(orb.radius)
@@ -204,52 +267,57 @@ local function SpinOrbitingTear(player, orb, multiplier)
     vel = vel * multiplier
   end
   orb.angle = orb.angle + orb.direction * vel
-  -- angle between the player and the tear
-  -- orb.angle = GetAngle(player.Position, orb.tear.Position)
   local offset = Vector(math.cos(orb.angle), math.sin(orb.angle)) * orb.radius
-  orb.tear.Position = player.Position + offset
+  orb.entity.Position = player.Position + offset
   -- tear orientation
   local tangentAngle = orb.angle + orb.direction * HALF_PI
-  orb.tear.Velocity = Vector(math.cos(tangentAngle), math.sin(tangentAngle))
-  -- orb.tear.Rotation = orb.angle + HALF_PI
+  orb.entity.Velocity = Vector(math.cos(tangentAngle), math.sin(tangentAngle))
 end
 
 --- @param player EntityPlayer
---- @param tear EntityTear | EntityProjectile
---- @return OrbitalTear
-local function AddToOrbitals(player, tear)
-  local tearHash = GetPtrHash(tear)
-  if orbitingTears[tearHash] then
-    return orbitingTears[tearHash] -- already in orbit
-  end
+--- @param orbital EntityOrbital
+--- @return Orbital<EntityOrbital>
+local function AddToOrbitals(player, orbital)
+  local orbitalHash = GetPtrHash(orbital)
 
-  if tear.Type == EntityType.ENTITY_TEAR then
-    tear:AddTearFlags(TearFlags.TEAR_SPECTRAL)
-    tear.FallingAcceleration = -0.1
-    tear.Height = -10
+  local store
+
+  if orbital.Type == EntityType.ENTITY_TEAR then
+    store = orbitingTears
+    orbital:AddTearFlags(TearFlags.TEAR_SPECTRAL)
+    orbital.Height = -10
+    orbital.FallingAcceleration = -0.1
+    orbital.FallingSpeed = 0
   else
-    tear:AddProjectileFlags(ProjectileFlags.HIT_ENEMIES | ProjectileFlags.CANT_HIT_PLAYER | ProjectileFlags.GHOST)
-    tear.FallingAccel = -0.1
+    store = orbitingEntities
+    if orbital.Type == EntityType.ENTITY_PROJECTILE then
+      orbital:AddProjectileFlags(ProjectileFlags.HIT_ENEMIES | ProjectileFlags.CANT_HIT_PLAYER | ProjectileFlags.GHOST)
+      orbital.FallingAccel = -0.1
+      orbital.FallingSpeed = 0
+    end
   end
-  tear.FallingSpeed = 0
-  orbitingTears[tearHash] = {
-    tear = tear,
-    direction = GetClockWiseSign(player.Position, tear),
-    radius = (tear.Position - player.Position):Length(),
-    angle = math.atan(tear.Position.Y - player.Position.Y, tear.Position.X - player.Position.X),
-    time = 0,
+  if store.list[orbitalHash] then
+    return store.list[orbitalHash] -- already in orbit
+  end
+  store.list[orbitalHash] = {
+    entity = orbital,
+    direction = GetClockWiseSign(player.Position, orbital),
+    radius = (orbital.Position - player.Position):Length(),
+    angle = GetAngle(player.Position, orbital.Position),
+    expirationFrame = game:GetFrameCount() + tearLifetime,
   }
+  store.length = store.length + 1
 
-  orbitingTearsCount = orbitingTearsCount + 1
-
-  return orbitingTears[tearHash]
+  return store.list[orbitalHash]
 end
 
 --- @param hash number
 --- @param hasPop? boolean
 local function RemoveFromOrbit(hash, hasPop)
+  local store
   if orbitingTears[hash] then
-    orbitingTears[hash].tear.FallingSpeed = 0.5
+    store = orbitingTears
+    orbitingTears[hash].entity.FallingSpeed = 0.5
     if orbitingTears[hash].tear.Type == EntityType.ENTITY_TEAR then
       if (hasPop) then
         orbitingTears[hash].tear.FallingAcceleration = -0.09
@@ -259,13 +327,20 @@ local function RemoveFromOrbit(hash, hasPop)
       else
         orbitingTears[hash].tear.FallingAcceleration = 0.1
       end
-    else
-      orbitingTears[hash].tear.FallingAccel = 0.1
     end
-    orbitingTears[hash].tear.Velocity = orbitingTears[hash].tear.Velocity * 10
-    orbitingTears[hash] = nil
-    orbitingTearsCount = orbitingTearsCount - 1
+    
   end
+  if orbitingEntities[hash] then
+    store = orbitingEntities
+    if orbitingEntities[hash].entity.Type == EntityType.ENTITY_PROJECTILE then
+      orbitingEntities[hash].entity.FallingAccel = 0.1
+    else
+      orbitingEntities[hash].entity.FallingAcceleration = 0.1
+    end
+  end
+  store.list[hash].entity.Velocity = store.list[hash].entity.Velocity * 10
+  store.list[hash] = nil
+  store.length = store.length - 1
 end
 
 ---@param topLeftPos Vector
@@ -287,14 +362,24 @@ local function purgeWallProjectiles(topLeftPos, bottomRightPos)
   end
 end
 
+---@param orbitalDict Dict<Orbital<EntityOrbital>>
+---@param gameFrameCount number
+---@param hasPop? boolean
+local function purgeOrbitingEntities(orbitalDict, gameFrameCount, hasPop)
+  for hash, orb in pairs(orbitalDict.list) do
+    if not (orb.entity and orb.entity:Exists() and not orb.entity:IsDead()) or orb.expirationFrame < gameFrameCount then
+      RemoveFromOrbit(hash, hasPop)
+    end
+  end
+end
+
 --- @param player EntityPlayer
 --- @param spawnPos Vector
 --- @param velocity Vector
 local function spawnBulletWall(player, spawnPos, velocity)
-  local proj = Isaac.Spawn(
+  local proj = SpawnEntity(
     EntityType.ENTITY_PROJECTILE,
     ProjectileVariant.PROJECTILE_TEAR,
-    0,
     spawnPos,
     velocity,
     player
@@ -411,25 +496,100 @@ local function IsProjectileBehindPlayer(playerPos, proj)
 end
 
 --- @param player EntityPlayer
+--- @param orb Orbital<EntityTear>
+local function calculatePostTearSynergies(player, orb)
+  if player:HasCollectible(CollectibleType.COLLECTIBLE_MOMS_WIG) then
+    if friendlySpiderCount < 5 then
+      local prob = player.Luck < 10 and 1 / (20 - (2 * player.Luck)) or 1
+      if rng:RandomFloat() < prob then
+        SpawnEntity(EntityType.ENTITY_FAMILIAR, FamiliarVariant.BLUE_SPIDER, player.Position, Vector.Zero, player)
+        friendlySpiderCount = friendlySpiderCount + 1
+      end
+    end
+  end
+
+  if player:HasCollectible(CollectibleType.COLLECTIBLE_LARGE_ZIT) then
+    if rng:RandomFloat() < 0.05 then
+      local zitTear = player:FireTear(player.Position, orb.entity.Velocity, false, true, false, player, 2)
+      zitTear.TearFlags = TearFlags.TEAR_SLOW
+      AddToOrbitals(player, zitTear)
+      SpawnEntity(EntityType.ENTITY_EFFECT, EffectVariant.PLAYER_CREEP_WHITE, orb.entity.Position, Vector.Zero, player)
+    end
+  end
+
+  if player:HasCollectible(CollectibleType.COLLECTIBLE_AKELDAMA) then
+    local akeldamaTear = player:FireTear(player.Position, orb.entity.Velocity, false, true, false)
+    akeldamaTear.TearFlags = TearFlags.TEAR_CHAIN | TearFlags.TEAR_SPECTRAL
+    akeldamaTear.CollisionDamage = 3.5
+    akeldamaTear.Size = 7
+    akeldamaTear.Scale = 1
+    akeldamaTear:ChangeVariant(TearVariant.BLOOD)
+  end
+
+  if player:HasCollectible(CollectibleType.COLLECTIBLE_IMMACULATE_HEART) then
+    if rng:RandomFloat() < 0.2 then
+      local immaculateTear = player:FireTear(player.Position, orb.entity.Velocity, false)
+      local immaculateOrb = AddToOrbitals(player, immaculateTear)
+      immaculateOrb.direction = immaculateOrb.direction * -1
+    end
+  end
+
+  if (player:HasCollectible(CollectibleType.COLLECTIBLE_GHOST_PEPPER)) then
+    local prob = math.min(1/(12 - player.Luck), 0.5)
+    if rng:RandomFloat() < prob then
+      local fire = SpawnEntity(EntityType.ENTITY_EFFECT, EffectVariant.BLUE_FLAME, orb.entity.Position, Vector.Zero, player):ToEffect()
+      if fire then
+        AddToOrbitals(player, fire)
+      end
+    end
+  end
+
+  if (player:HasCollectible(CollectibleType.COLLECTIBLE_BIRDS_EYE)) then
+    local prob = math.min(1/(12 - player.Luck), 0.5)
+    if rng:RandomFloat() < prob then
+      local fire = SpawnEntity(EntityType.ENTITY_EFFECT, EffectVariant.RED_CANDLE_FLAME, orb.entity.Position, Vector.Zero, player):ToEffect()
+      if fire then
+        AddToOrbitals(player, fire)
+      end
+    end
+  end
+
+  if (player:HasCollectible(CollectibleType.COLLECTIBLE_CHEMICAL_PEEL)) then
+    if orb.direction == 1 then
+      orb.entity.CollisionDamage = orb.entity.CollisionDamage + 2
+    end
+  end
+
+  if (player:HasCollectible(CollectibleType.COLLECTIBLE_BLOOD_CLOT)) then
+    if orb.direction == 1 then
+      orb.entity.CollisionDamage = orb.entity.CollisionDamage + 1
+      orb.expirationFrame = orb.expirationFrame + 40 -- more range
+    end
+  end
+end
+
+--- @param player EntityPlayer
 local function TryAbsorbTears(player)
   local nearby = Isaac.FindInRadius(player.Position, 60, EntityPartition.BULLET)
   for _, ent in ipairs(nearby) do
     local proj = ent:ToProjectile()
-    if proj and not orbitingTears[GetPtrHash(proj)] and IsProjectileBehindPlayer(player.Position, proj) then
-      if wallProjectiles[GetPtrHash(proj)] then
-        if orbitingTearsCount > MAX_ORBITING_TEARS then
+    if proj and IsProjectileBehindPlayer(player.Position, proj) then
+      local projHash = GetPtrHash(proj)
+      if wallProjectiles[projHash] then
+        if orbitingTears.length > orbitingTears.limit then
           proj:Remove()
           goto continue
         end
         if player:HasCollectible(CollectibleType.COLLECTIBLE_SPIRIT_SWORD) then
-          player:FireKnife(
-            player,
-            0,
-            false,
-            KnifeVariant.SPIRIT_SWORD,
-            0)
+          player:FireKnife(player, 0, false, KnifeVariant.SPIRIT_SWORD, 0)
           proj:Remove()
-          return
+          goto continue
+        end
+        if player:HasCollectible(CollectibleType.COLLECTIBLE_LUDOVICO_TECHNIQUE) and ludo.Tear then
+          ludo.Multiplier = ludo.Multiplier + 0.1
+          ludo.Tear.CollisionDamage = ludo.BaseDamage * ludo.Multiplier
+          table.insert(ludo.expirationFrames, game:GetFrameCount() + 30 * framesPerSecond)
+          goto continue
         end
         local tear = player:FireTear(proj.Position, proj.Velocity, true, true, true)
         proj:Remove()
@@ -437,78 +597,29 @@ local function TryAbsorbTears(player)
         -- LogFlag("tearFlags", tear.TearFlags)
         -- tear.TearFlags = tear.TearFlags | TearFlags.TEAR_ORBIT
         if tear then
-          AddToOrbitals(player, tear)
+          local orb = AddToOrbitals(player, tear) --[[@as Orbital<EntityTear>]]
 
-          if player:HasCollectible(CollectibleType.COLLECTIBLE_MOMS_WIG) then
-            if friendlySpiderCount < 5 then
-              local prob = player.Luck < 10 and 1 / (20 - (2 * player.Luck)) or 1
-              if rng:RandomFloat() < prob then
-                Isaac.Spawn(
-                  EntityType.ENTITY_FAMILIAR,
-                  FamiliarVariant.BLUE_SPIDER,
-                  0,
-                  player.Position,
-                  Vector.Zero, player)
-                friendlySpiderCount = friendlySpiderCount + 1
-              end
-            end
-          end
-
-          if player:HasCollectible(CollectibleType.COLLECTIBLE_LARGE_ZIT) then
-            if rng:RandomFloat() < 0.05 then
-              tear = player:FireTear(player.Position, proj.Velocity, false, true, false, player, 2)
-              tear.TearFlags = TearFlags.TEAR_SLOW
-              AddToOrbitals(player, tear)
-              local creep = Isaac.Spawn(
-                EntityType.ENTITY_EFFECT,
-                EffectVariant.PLAYER_CREEP_WHITE,
-                0,
-                proj.Position,
-                Vector.Zero,
-                player)
-              -- creep:Update()
-            end
-          end
-
-          if player:HasCollectible(CollectibleType.COLLECTIBLE_AKELDAMA) then
-            tear = player:FireTear(player.Position, proj.Velocity, false, true, false)
-            tear.TearFlags = TearFlags.TEAR_CHAIN | TearFlags.TEAR_SPECTRAL
-            tear.CollisionDamage = 3.5
-            tear.Size = 7
-            tear.Scale = 1
-            tear:ChangeVariant(TearVariant.BLOOD)
-          end
-
-          if player:HasCollectible(CollectibleType.COLLECTIBLE_IMMACULATE_HEART) then
-            if rng:RandomFloat() < 0.2 then
-              local tear = player:FireTear(player.Position, proj.Velocity, false)
-              tear.TearFlags = TearFlags.TEAR_SPECTRAL | TearFlags.TEAR_ORBIT
-              tear.FallingAcceleration = -0.1
-            end
-          end
+          calculatePostTearSynergies(player, orb)
         end
-      else
-        if proj.ProjectileFlags & ProjectileFlags.HIT_ENEMIES ~= 0 or orbitingTearsCount > MAX_ORBITING_PROJ then
-          goto continue
+      elseif not orbitingEntities.list[projHash] then
+        if not proj:HasProjectileFlags(ProjectileFlags.HIT_ENEMIES) and orbitingEntities.length > orbitingEntities.limit then
+          AddToOrbitals(player, proj)
         end
-        AddToOrbitals(player, proj)
       end
-
-      
     end
     ::continue::
   end
 end
 
 --- Detecta colisiones entre tears orbitando basado en su ángulo y radio
---- @param orbitingTearsTable { [number]: OrbitalTear }
+--- @param orbitingTearsD Dict<Orbital<EntityTear>>
 --- @param orbitRadius number
-local function CheckOrbitingTearCollisions(orbitingTearsTable, orbitRadius)
+local function CheckOrbitingTearCollisions(orbitingTearsD, orbitRadius)
   local tearSize = 24
   local minAngle = tearSize / orbitRadius   -- arco = longitud / radio
   -- Convertimos la tabla en un array ordenable
   local sorted = {}
-  for _, orbital in pairs(orbitingTearsTable) do
+  for _, orbital in pairs(orbitingTearsD.list) do
     local pre = orbital.angle
     orbital.angle = orbital.angle % TWO_PI
     table.insert(sorted, orbital)
@@ -530,33 +641,82 @@ local function CheckOrbitingTearCollisions(orbitingTearsTable, orbitRadius)
 end
 
 ---@param player EntityPlayer
-local function UpdateOrbitingTears(player)
-  local hasPop = player:HasCollectible(CollectibleType.COLLECTIBLE_POP)
-  local multiplier = 1
-  if hasPop then
-    multiplier = 0.5
-  end
-  if player:HasCollectible(CollectibleType.COLLECTIBLE_PROPTOSIS) then
-    multiplier = multiplier * 2
-  end
-  for hash, orb in pairs(orbitingTears) do
-    orb.time = orb.time + 1
-    if not (orb.tear and orb.tear:Exists() and not orb.tear:IsDead()) or orb.time > tearLifetime then
-      RemoveFromOrbit(hash, hasPop)
+local function UpdateOrbitingRadius(player)
+  if player:HasCollectible(CollectibleType.COLLECTIBLE_MARKED) then
+    local target = GetMarkedTarget(player)
+    if target then
+      orbitingRadius = math.min(player.TearRange, target.Position:Distance(player.Position))
+    end
+  else
+    if player:GetShootingInput():Length() > 0 then
+      if (orbitingRadius < player.TearRange) then
+        orbitingRadius = orbitingRadius + RADIUS_STEP_MULTIPLIER
+      end
     else
+      if (orbitingRadius > MIN_ORBITING_RADIUS) then
+        orbitingRadius = orbitingRadius - RADIUS_STEP_MULTIPLIER
+      end
+    end
+  end
+end
+
+---@param player EntityPlayer
+local function UpdateOrbitingTears(player)
+  local gameFrameCount = game:GetFrameCount()
+  if player:HasCollectible(CollectibleType.COLLECTIBLE_LUDOVICO_TECHNIQUE) and ludo.Tear then
+    if (ludo.ExpirationFrames[ludo.LogPointer] and ludo.ExpirationFrames[ludo.LogPointer] < gameFrameCount) then
+      ludo.LogPointer = ludo.LogPointer + 1
+      ludo.Multiplier = ludo.Multiplier - 0.1
+      ludo.Tear.CollisionDamage = ludo.BaseDamage * ludo.Multiplier
+    end
+    return
+  end
+  local hasPop = player:HasCollectible(CollectibleType.COLLECTIBLE_POP)
+  purgeOrbitingEntities(orbitingTears, gameFrameCount, hasPop)
+  if player:HasCollectible(CollectibleType.COLLECTIBLE_EYE_OF_THE_OCCULT) then
+    local distanceSquared = player.TearRange ^ 2
+    for _, orb in pairs(orbitingTears.list) do
+      if orb.entity.Position:DistanceSquared(player.Position) > distanceSquared then
+        local direction = (player.Position - orb.entity.Position):Normalized()
+        orb.entity.Position = player.Position + direction * player.TearRange
+      end
+    end
+  else
+    local multiplier = 1
+    if hasPop then
+      multiplier = 0.5
+    end
+    if player:HasCollectible(CollectibleType.COLLECTIBLE_PROPTOSIS) then
+      multiplier = multiplier * 2
+    end
+    for _, orb in pairs(orbitingTears.list) do
       local targetRadius = orb.rangeMultiplier and orb.rangeMultiplier * orbitingRadius or orbitingRadius
       if orb.radius < targetRadius then
         orb.radius = orb.radius + player.ShotSpeed * RADIUS_STEP_MULTIPLIER
-      end
-      if orb.radius > targetRadius then
+      elseif orb.radius > targetRadius then
         orb.radius = targetRadius
       end
       SpinOrbitingTear(player, orb, multiplier)
     end
-  end
 
-  if (hasPop and current % 3 == 0) then -- artificial delay for the pop effect
-    CheckOrbitingTearCollisions(orbitingTears, orbitingRadius)
+    if (hasPop and current % 3 == 0) then -- artificial delay for the pop effect
+      CheckOrbitingTearCollisions(orbitingTears, orbitingRadius)
+    end
+  end
+end
+
+---@param player EntityPlayer
+local function UpdateOrbitingEntities(player)
+  local gameFrameCount = game:GetFrameCount()
+  purgeOrbitingEntities(orbitingEntities, gameFrameCount)
+  for _, orb in pairs(orbitingEntities.list) do
+    local targetRadius = orb.rangeMultiplier and orb.rangeMultiplier * orbitingRadius or orbitingRadius
+    if orb.radius < targetRadius then
+      orb.radius = orb.radius + player.ShotSpeed * RADIUS_STEP_MULTIPLIER
+    elseif orb.radius > targetRadius then
+      orb.radius = targetRadius
+    end
+    SpinOrbitingTear(player, orb)
   end
 end
 
@@ -616,9 +776,11 @@ local function HandleRoomEnter()
     return
   end
 
+  tearsToCheck = {}
+  effectToCheck = {}
   wallProjectiles = {}
-  orbitingTears = {}
-  orbitingTearsCount = 0
+  orbitingEntities = newDict()
+  orbitingTears = newDict()
 
   calculateRoomFireDelay(player)
 
@@ -626,11 +788,15 @@ local function HandleRoomEnter()
     local tear = player:FireTear(
       player.Position,
       player.Velocity,
-      true,
+      false,
       true,
       true
     )
     tear.TearFlags = TearFlags.TEAR_LUDOVICO
+    ludo.Tear = tear
+    ludo.BaseDamage = tear.CollisionDamage
+    ludo.Multiplier = 0.5
+    ludo.LogPointer = 0
   end
 end
 theSunMod:AddCallback(ModCallbacks.MC_POST_NEW_ROOM, HandleRoomEnter)
@@ -644,7 +810,7 @@ function theSunMod:OnTearCollision(tear, collider)
   --   collision = tear.CollisionDamage,
   -- })
   local tearHash = GetPtrHash(tear)
-  if not orbitingTears[tearHash] then
+  if not orbitingTears.list[tearHash] then
     return
   end
   if collider:IsActiveEnemy() and collider:IsVulnerableEnemy() then
@@ -652,12 +818,12 @@ function theSunMod:OnTearCollision(tear, collider)
     -- sticky: explosivo - sinus infection - mucormycosis
     local isSticky = tear:HasTearFlags(TearFlags.TEAR_STICKY | TearFlags.TEAR_BOOGER | TearFlags.TEAR_SPORE)
     if not isPiercing or isSticky then
-      if tear:HasTearFlags(TearFlags.TEAR_BOUNCE) and not orbitingTears[tearHash].bounced then
-        orbitingTears[tearHash].bounced = true
-        orbitingTears[tearHash].direction = -orbitingTears[tearHash].direction
+      if tear:HasTearFlags(TearFlags.TEAR_BOUNCE) and not orbitingTears.list[tearHash].bounced then
+        orbitingTears.list[tearHash].bounced = true
+        orbitingTears.list[tearHash].direction = -orbitingTears.list[tearHash].direction
         -- TODO: select the correct player
         -- local player = Isaac.GetPlayer(0)
-        -- SpinOrbitingTear(player, orbitingTears[tearHash])
+        -- SpinOrbitingTear(player, orbitingEntity[tearHash])
         -- tear:Update()
       else
         RemoveFromOrbit(tearHash)
@@ -688,16 +854,8 @@ function theSunMod:OnUpdate()
     end
 
     TryAbsorbTears(player)
-    if player:GetShootingInput():Length() > 0 then
-      if (orbitingRadius < player.TearRange) then
-        orbitingRadius = orbitingRadius + RADIUS_STEP_MULTIPLIER
-      end
-    else
-      if (orbitingRadius > MIN_ORBITING_RADIUS) then
-        orbitingRadius = orbitingRadius - RADIUS_STEP_MULTIPLIER
-      end
-    end
-
+    UpdateOrbitingRadius(player)
+    UpdateOrbitingEntities(player)
     UpdateOrbitingTears(player)
     ::continue::
   end
@@ -716,11 +874,6 @@ end
 
 theSunMod:AddCallback(ModCallbacks.MC_USE_PILL, theSunMod.OnUsePill)
 
---- @type { [number]: EntityTear }
-local tearsToCheck = {}
---- @type { [number]: EntityTear }
-local effectToCheck = {}
-
 --- Accessing the initialized entity does provide incomplete data in some use cases
 --- @param tear EntityTear
 function theSunMod:HandleTearInit(tear)
@@ -737,20 +890,10 @@ function theSunMod:HandleTearInit(tear)
 end
 theSunMod:AddCallback(ModCallbacks.MC_POST_TEAR_INIT, theSunMod.HandleTearInit, TearVariant.BLUE)
 
---- @param effect EntityEffect
-function theSunMod:HandleEffectInit(effect)
-  log:Value("HandleEffectInit", {
-    variant = log:Enum("effect", effect.Variant),
-    damage = effect.DamageSource,
-  })
-end
-theSunMod:AddCallback(ModCallbacks.MC_POST_EFFECT_INIT, theSunMod.HandleEffectInit)
-
---------------------------------------------------------------------------------------------------
-
 function theSunMod:HandleTearUpdate(tear)
-  if tearsToCheck[GetPtrHash(tear)] then
-    tearsToCheck[GetPtrHash(tear)] = nil
+  local hash = GetPtrHash(tear)
+  if tearsToCheck[hash] then
+    tearsToCheck[hash] = nil
 
     local color = GetColorOffset(tear)
 
@@ -760,8 +903,47 @@ function theSunMod:HandleTearUpdate(tear)
     end
   end
 end
-
 theSunMod:AddCallback(ModCallbacks.MC_POST_TEAR_UPDATE, theSunMod.HandleTearUpdate, TearVariant.BLUE)
+
+--- @param effect EntityEffect
+function theSunMod:HandleEffectInit(effect)
+  log:Value("HandleEffectInit", {
+    variant = log:Enum("effect", effect.Variant),
+    damage = effect.DamageSource,
+  })
+  local player = effect.SpawnerEntity:ToPlayer()
+  if not player then
+    return
+  end
+  if not IsTheSun(player) then
+    return
+  end
+  if player:HasCollectible(CollectibleType.COLLECTIBLE_EVIL_EYE) then
+    effectToCheck[GetPtrHash(effect)] = effect
+  end
+end
+theSunMod:AddCallback(ModCallbacks.MC_POST_EFFECT_INIT, theSunMod.HandleEffectInit)
+
+--- @param effect EntityEffect
+function theSunMod:HandleEffectUpdate(effect)
+  local hash = GetPtrHash(effect)
+  if effectToCheck[hash] then
+    effectToCheck[hash] = nil
+
+    if effect.Variant == EffectVariant.EVIL_EYE then
+      local player = effect.SpawnerEntity:ToPlayer()
+      if not player then
+        return
+      end
+      AddToOrbitals(player, effect)
+    end
+  end
+end
+theSunMod:AddCallback(ModCallbacks.MC_POST_EFFECT_UPDATE, theSunMod.HandleEffectUpdate, EffectVariant.EVIL_EYE)
+
+
+
+--------------------------------------------------------------------------------------------------
 
 function theSunMod:HandleProjInit(proj)
   log:Value("HandleProjInit", {
@@ -804,7 +986,7 @@ function theSunMod:HandleFireTear(tear, player)
     fallingSpeed = tear.FallingSpeed,
     fallingAccel = tear.FallingAcceleration,
   })
-  -- Isaac.Spawn(EntityType.ENTITY_EFFECT, EffectVariant.EVIL_EYE, 0, tear.Position, Vector(5, 0), player)
+  -- SpawnEntity(EntityType.ENTITY_EFFECT, EffectVariant.EVIL_EYE, tear.Position, Vector(5, 0), player)
 end
 theSunMod:AddCallback(ModCallbacks.MC_POST_FIRE_TEAR, theSunMod.HandleFireTear)
 
@@ -830,8 +1012,7 @@ theSunMod:AddCallback(ModCallbacks.MC_POST_PLAYER_INIT, theSunMod.PlutoInit)
 function theSunMod:HolyOutburstUse(_, _, player)
   local spawnPos = player.Position
 
-  local creep = Isaac.Spawn(EntityType.ENTITY_EFFECT, EffectVariant.PLAYER_CREEP_WHITE, 0, spawnPos, Vector.Zero,
-    player):ToEffect()
+  local creep = SpawnEntity(EntityType.ENTITY_EFFECT, EffectVariant.PLAYER_CREEP_WHITE, spawnPos, Vector.Zero, player):ToEffect()
   creep.Scale = 2
   creep:Update()
 
