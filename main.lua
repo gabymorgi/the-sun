@@ -56,20 +56,21 @@ local effectToCheck = {}
 
 -- synergy variables
 
----@type { Tear: EntityTear?, Multiplier: number, expirationFrames: number[], logActPointer: number }
+---@type { Tear: EntityTear?, BaseDamage: number, Multiplier: number, ExpirationFrames: number[], LogPointer: number }
 local ludo = {
   Tear = nil,
   BaseDamage = 3.5,
+  Multiplier = 0.5,
   ExpirationFrames = {},
   LogPointer = 0
 }
 local leadPencilCount = 0
 local friendlySpiderCount = 0
 local colorOffsets = {
-  Red = { colorOffset = { 0.61, -0.39, -0.39 }, rangeMultiplier = 0.63 },
-  Yellow = { colorOffset = { 0.54, 0.61, -0.4 }, rangeMultiplier = 0.88 },
-  Green = { colorOffset = { -0.4, 0.61, -0.26 }, rangeMultiplier = 1.13 },
-  Cyan = { colorOffset = { -0.39, 0.4, 0.61 }, rangeMultiplier = 1.38 },
+  Red = { colorOffset = { 0.61, -0.39, -0.39 }, rangeMultiplier = 1.38 },
+  Yellow = { colorOffset = { 0.54, 0.61, -0.4 }, rangeMultiplier = 1.13 },
+  Green = { colorOffset = { -0.4, 0.61, -0.26 }, rangeMultiplier = 0.88 },
+  Cyan = { colorOffset = { -0.39, 0.4, 0.61 }, rangeMultiplier = 0.63 },
 }
 
 local roomMultiplier = {
@@ -115,9 +116,9 @@ end
 local function GetColorOffset(tear)
   for color, values in pairs(colorOffsets) do
     if (
-      math.abs(tear.Color.RO - values[1]) < 0.01 and
-      math.abs(tear.Color.GO - values[2]) < 0.01 and
-      math.abs(tear.Color.BO - values[3]) < 0.01
+      math.abs(tear.Color.RO - values.colorOffset[1]) < 0.01 and
+      math.abs(tear.Color.GO - values.colorOffset[2]) < 0.01 and
+      math.abs(tear.Color.BO - values.colorOffset[3]) < 0.01
     ) then
       return color
     end
@@ -131,8 +132,6 @@ local function calculateRoomFireDelay(player)
   local roomShape = room:GetRoomShape()
 
   roomDelay = player.MaxFireDelay * (roomMultiplier[roomShape] or 1)
-
-  log:Value("roomDelay", roomDelay .. " - " .. player.MaxFireDelay .. " - " .. roomShape .. " - " .. roomMultiplier[roomShape])
 end
 
 --- @param player EntityPlayer
@@ -315,28 +314,33 @@ end
 --- @param hasPop? boolean
 local function RemoveFromOrbit(hash, hasPop)
   local store
-  if orbitingTears[hash] then
+  if orbitingTears.list[hash] then
     store = orbitingTears
-    orbitingTears[hash].entity.FallingSpeed = 0.5
-    if orbitingTears[hash].tear.Type == EntityType.ENTITY_TEAR then
+    local tear = orbitingTears.list[hash].entity
+    tear.FallingSpeed = 0.5
+    if tear.Type == EntityType.ENTITY_TEAR then
       if (hasPop) then
-        orbitingTears[hash].tear.FallingAcceleration = -0.09
-        orbitingTears[hash].tear.TearFlags = orbitingTears[hash].tear.TearFlags & ~TearFlags.TEAR_SPECTRAL
-        orbitingTears[hash].tear.FallingSpeed = 0
-        orbitingTears[hash].tear.Velocity = orbitingTears[hash].tear.Velocity:Rotated(-90)
+        tear.FallingAcceleration = -0.09
+        tear.TearFlags = tear.TearFlags & ~TearFlags.TEAR_SPECTRAL
+        tear.FallingSpeed = 0
+        tear.Velocity = tear.Velocity:Rotated(-90)
       else
-        orbitingTears[hash].tear.FallingAcceleration = 0.1
+        tear.FallingAcceleration = 0.1
       end
     end
-    
   end
-  if orbitingEntities[hash] then
+  if orbitingEntities.list[hash] then
     store = orbitingEntities
-    if orbitingEntities[hash].entity.Type == EntityType.ENTITY_PROJECTILE then
-      orbitingEntities[hash].entity.FallingAccel = 0.1
+    local entity = orbitingEntities.list[hash].entity
+    if entity.Type == EntityType.ENTITY_PROJECTILE then
+      entity.FallingAccel = 0.1
     else
-      orbitingEntities[hash].entity.FallingAcceleration = 0.1
+      entity.FallingAcceleration = 0.1
     end
+  end
+  if not store then
+    log:Value("RemoveFromOrbit", "not found")
+    return
   end
   store.list[hash].entity.Velocity = store.list[hash].entity.Velocity * 10
   store.list[hash] = nil
@@ -537,8 +541,10 @@ local function calculatePostTearSynergies(player, orb)
   if (player:HasCollectible(CollectibleType.COLLECTIBLE_GHOST_PEPPER)) then
     local prob = math.min(1/(12 - player.Luck), 0.5)
     if rng:RandomFloat() < prob then
-      local fire = SpawnEntity(EntityType.ENTITY_EFFECT, EffectVariant.BLUE_FLAME, orb.entity.Position, Vector.Zero, player):ToEffect()
+      local fire = SpawnEntity(EntityType.ENTITY_EFFECT, EffectVariant.BLUE_FLAME, orb.entity.Position, Vector(10, 0), player):ToEffect()
       if fire then
+        fire.Timeout = 60
+        fire.LifeSpan = 60
         AddToOrbitals(player, fire)
       end
     end
@@ -549,6 +555,8 @@ local function calculatePostTearSynergies(player, orb)
     if rng:RandomFloat() < prob then
       local fire = SpawnEntity(EntityType.ENTITY_EFFECT, EffectVariant.RED_CANDLE_FLAME, orb.entity.Position, Vector.Zero, player):ToEffect()
       if fire then
+        fire.Timeout = 60
+        fire.LifeSpan = 60
         AddToOrbitals(player, fire)
       end
     end
@@ -588,7 +596,8 @@ local function TryAbsorbTears(player)
         if player:HasCollectible(CollectibleType.COLLECTIBLE_LUDOVICO_TECHNIQUE) and ludo.Tear then
           ludo.Multiplier = ludo.Multiplier + 0.1
           ludo.Tear.CollisionDamage = ludo.BaseDamage * ludo.Multiplier
-          table.insert(ludo.expirationFrames, game:GetFrameCount() + 30 * framesPerSecond)
+          table.insert(ludo.ExpirationFrames, game:GetFrameCount() + 30 * framesPerSecond)
+          proj:Remove()
           goto continue
         end
         local tear = player:FireTear(proj.Position, proj.Velocity, true, true, true)
@@ -602,7 +611,7 @@ local function TryAbsorbTears(player)
           calculatePostTearSynergies(player, orb)
         end
       elseif not orbitingEntities.list[projHash] then
-        if not proj:HasProjectileFlags(ProjectileFlags.HIT_ENEMIES) and orbitingEntities.length > orbitingEntities.limit then
+        if not proj:HasProjectileFlags(ProjectileFlags.HIT_ENEMIES) and orbitingEntities.length < orbitingEntities.limit then
           AddToOrbitals(player, proj)
         end
       end
@@ -890,11 +899,15 @@ function theSunMod:HandleTearInit(tear)
 end
 theSunMod:AddCallback(ModCallbacks.MC_POST_TEAR_INIT, theSunMod.HandleTearInit, TearVariant.BLUE)
 
+--- @param tear EntityTear
 function theSunMod:HandleTearUpdate(tear)
   local hash = GetPtrHash(tear)
   if tearsToCheck[hash] then
+    log:Value("HandleTearFired", {
+      flags = log:Flag("tear", tear.TearFlags),
+      variant = log:Enum("tear", tear.Variant),
+    })
     tearsToCheck[hash] = nil
-
     local color = GetColorOffset(tear)
 
     if color then
@@ -910,19 +923,28 @@ function theSunMod:HandleEffectInit(effect)
   log:Value("HandleEffectInit", {
     variant = log:Enum("effect", effect.Variant),
     damage = effect.DamageSource,
+    SpawnerEntity = effect.SpawnerEntity,
+    CollisionDamage = effect.CollisionDamage,
+    Timeout = effect.Timeout,
+    LifeSpan = effect.LifeSpan,
+    FallingAcceleration = effect.FallingAcceleration,
+    FallingSpeed = effect.FallingSpeed,
   })
-  local player = effect.SpawnerEntity:ToPlayer()
-  if not player then
-    return
-  end
-  if not IsTheSun(player) then
-    return
-  end
+  
+  -- local player = effect.SpawnerEntity:ToPlayer()
+  -- if not player then
+  --   return
+  -- end
+  -- if not IsTheSun(player) then
+  --   return
+  -- end
+  effectToCheck[GetPtrHash(effect)] = effect
+  local player = Isaac.GetPlayer(0)
   if player:HasCollectible(CollectibleType.COLLECTIBLE_EVIL_EYE) then
-    effectToCheck[GetPtrHash(effect)] = effect
+    AddToOrbitals(player, effect)
   end
 end
-theSunMod:AddCallback(ModCallbacks.MC_POST_EFFECT_INIT, theSunMod.HandleEffectInit)
+theSunMod:AddCallback(ModCallbacks.MC_POST_EFFECT_INIT, theSunMod.HandleEffectInit, EffectVariant.EVIL_EYE)
 
 --- @param effect EntityEffect
 function theSunMod:HandleEffectUpdate(effect)
@@ -946,13 +968,13 @@ theSunMod:AddCallback(ModCallbacks.MC_POST_EFFECT_UPDATE, theSunMod.HandleEffect
 --------------------------------------------------------------------------------------------------
 
 function theSunMod:HandleProjInit(proj)
-  log:Value("HandleProjInit", {
-    flags = proj.ProjectileFlags, -- log:Flag("proj", proj.ProjectileFlags),
-    variant = proj.Variant,       -- log:Enum("proj", proj.Variant),
-    color = proj.Color,
-    spawnerType = proj.SpawnerType,
-    spawnerVariant = proj.SpawnerVariant,
-  })
+  -- log:Value("HandleProjInit", {
+  --   flags = proj.ProjectileFlags, -- log:Flag("proj", proj.ProjectileFlags),
+  --   variant = proj.Variant,       -- log:Enum("proj", proj.Variant),
+  --   color = proj.Color,
+  --   spawnerType = proj.SpawnerType,
+  --   spawnerVariant = proj.SpawnerVariant,
+  -- })
   local player = proj.SpawnerEntity:ToPlayer()
   if not player then
     return
@@ -983,8 +1005,6 @@ function theSunMod:HandleFireTear(tear, player)
   log:Value("HandleTearFired", {
     flags = log:Flag("tear", tear.TearFlags),
     variant = log:Enum("tear", tear.Variant),
-    fallingSpeed = tear.FallingSpeed,
-    fallingAccel = tear.FallingAcceleration,
   })
   -- SpawnEntity(EntityType.ENTITY_EFFECT, EffectVariant.EVIL_EYE, tear.Position, Vector(5, 0), player)
 end

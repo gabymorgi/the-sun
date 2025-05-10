@@ -182,7 +182,6 @@ local flags = {
     "TEAR_POOF_A",
     "TEAR_POOF_B",
     "RIPPLE_POOF",
-    "CROSS_POOF",
     "POOF01",
     "POOF02",
     "POOF04",
