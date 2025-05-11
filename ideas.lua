@@ -1,5 +1,4 @@
-
---[[ 
+--[[
 
 Code extracted from other mods that I found useful
 
@@ -78,5 +77,3 @@ function mod.getShootVector(player)
     end
 end
 	--]]
-
-
