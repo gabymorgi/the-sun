@@ -41,7 +41,7 @@ function Orbit:add(player, orbital, tearLifetime)
     direction = Utils.GetClockWiseSign(player.Position, orbital),
     radius = (orbital.Position - player.Position):Length(),
     angle = Utils.GetAngle(player.Position, orbital.Position),
-    expirationFrame = Game():GetFrameCount() + (tearLifetime or player.TearRange),
+    expirationFrame = Game():GetFrameCount() + (tearLifetime or player.TearRange / 2),
   }
   self.length = self.length + 1
   return self.list[orbitalHash]
@@ -76,9 +76,11 @@ end
 ---@diagnostic disable-next-line: duplicate-set-field
 function TearOrbit:add(player, orbital)
   orbital:AddTearFlags(TearFlags.TEAR_SPECTRAL)
-  orbital.Height = -10
-  orbital.FallingAcceleration = -0.1
-  orbital.FallingSpeed = 0
+  if (orbital.Type == EntityType.ENTITY_TEAR) then
+    orbital.Height = -10
+    orbital.FallingAcceleration = -0.1
+    orbital.FallingSpeed = 0
+  end
   return Orbit.add(self, player, orbital)
 end
 
@@ -86,19 +88,19 @@ end
 ---@diagnostic disable-next-line: duplicate-set-field
 function TearOrbit:remove(hash)
   local tear = self.list[hash].entity
-  if tear:HasTearFlags(TearFlags.TEAR_OCCULT) then
-    tear:Die()
-  else
-    tear.FallingSpeed = 0.5
-    tear.Velocity = tear.Velocity * 10
-    if tear:HasTearFlags(TearFlags.TEAR_POP) then
-      tear.FallingAcceleration = -0.09
-      tear:ClearTearFlags(TearFlags.TEAR_SPECTRAL)
-      tear.FallingSpeed = 0
-      tear.Velocity = tear.Velocity:Rotated(-90)
-    else
-      tear.FallingAcceleration = 0.1
-    end
+  if tear.Type == EntityType.ENTITY_TEAR then
+      -- tear.FallingSpeed = 0.5
+      if not tear:HasTearFlags(TearFlags.TEAR_OCCULT) then
+        tear.Velocity = tear.Velocity * 10
+      end
+      if tear:HasTearFlags(TearFlags.TEAR_POP) then
+        tear.FallingAcceleration = -0.09
+        tear:ClearTearFlags(TearFlags.TEAR_SPECTRAL)
+        tear.FallingSpeed = 0
+        tear.Velocity = tear.Velocity:Rotated(-90)
+      else
+        tear.FallingAcceleration = 0
+      end
   end
   Orbit.remove(self, hash)
 end

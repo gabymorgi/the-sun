@@ -25,7 +25,7 @@ local framesPerSecond = 25
 ---@alias WallDict { [number]: EntityProjectile }
 ---@type WallDict
 local wallProjectiles = {}
-local RADIUS_STEP_MULTIPLIER = 2
+local RADIUS_STEP_MULTIPLIER = 3
 local PROJECTILE_SPAWN_OFFSET = 40
 local GRID_SIZE = 40
 local PROJECTILE_DESPAWN_OFFSET = Vector(80, 80)
@@ -203,7 +203,11 @@ local function GetPlayerData(player)
         max = 90,
         act = GRID_SIZE,
       },
-      cacheCollectibles = {},
+      cacheCollectibles = {
+        [CollectibleType.COLLECTIBLE_DR_FETUS] = false,
+        [CollectibleType.COLLECTIBLE_EPIC_FETUS] = false,
+        [CollectibleType.COLLECTIBLE_IPECAC] = false,
+      },
       activeBars = {},
       leadPencilCount = 0,
       friendlySpiderCount = 0,
@@ -223,11 +227,19 @@ local function CachePlayerCollectibles(player)
   if value ~= playerData.cacheCollectibles[CollectibleType.COLLECTIBLE_DR_FETUS] then
     playerData.cacheCollectibles[CollectibleType.COLLECTIBLE_DR_FETUS] = value
     playerData.orbitRange.min = value and 100 or GRID_SIZE
+    playerData.orbitRange.act = Utils.Clamp(playerData.orbitRange.act, playerData.orbitRange.min, playerData.orbitRange.max)
   end
   value = player:HasCollectible(CollectibleType.COLLECTIBLE_EPIC_FETUS)
   if value ~= playerData.cacheCollectibles[CollectibleType.COLLECTIBLE_EPIC_FETUS] then
     playerData.cacheCollectibles[CollectibleType.COLLECTIBLE_EPIC_FETUS] = value
     playerData.orbitRange.min = value and 100 or GRID_SIZE
+    playerData.orbitRange.act = Utils.Clamp(playerData.orbitRange.act, playerData.orbitRange.min, playerData.orbitRange.max)
+  end
+  value = player:HasCollectible(CollectibleType.COLLECTIBLE_IPECAC)
+  if value ~= playerData.cacheCollectibles[CollectibleType.COLLECTIBLE_IPECAC] then
+    playerData.cacheCollectibles[CollectibleType.COLLECTIBLE_IPECAC] = value
+    playerData.orbitRange.min = value and 100 or GRID_SIZE
+    playerData.orbitRange.act = Utils.Clamp(playerData.orbitRange.act, playerData.orbitRange.min, playerData.orbitRange.max)
   end
   -- more collectibles
   if evaluate then
@@ -236,17 +248,40 @@ local function CachePlayerCollectibles(player)
 end
 
 --- @param player EntityPlayer
+local function ReleaseHomingTears(player)
+  local playerData = GetPlayerData(player)
+  local enemies = GetEnemiesInRange(player.Position, playerData.orbitRange.max + GRID_SIZE)
+  for hash, orb in pairs(playerData.tearOrbit.list) do
+    local closestEnemy = nil
+    local closestEnemyDist = 80 ^ 2
+    for _, enemy in pairs(enemies) do
+      local dist = enemy.Position:DistanceSquared(orb.entity.Position)
+      if dist < closestEnemyDist then
+        closestEnemy = enemy
+        closestEnemyDist = dist
+      end
+    end
+    if closestEnemy then
+      orb.entity.Velocity = (closestEnemy.Position - orb.entity.Position):Normalized() * player.ShotSpeed
+      playerData.tearOrbit:remove(hash)
+    end
+  end
+end
+
+--- @param player EntityPlayer
 --- @param releaseOrbit boolean?
 local function ExpandHomingTears(player, releaseOrbit)
   local playerData = GetPlayerData(player)
-  local enemies = GetEnemiesInRange(player.Position, playerData.orbitRange.max)
-  local targetDist = 80 ^ 2
+  local enemies
+  local step = player.ShotSpeed * RADIUS_STEP_MULTIPLIER * 2
+  local epsilon = 0.5
   for hash, orb in pairs(playerData.tearOrbit.list) do
     local closestEnemy = nil
-    local closestEnemyDist = targetDist
-    if not orb.target or not orb.target:Exists() or orb.target.Position:DistanceSquared(orb.entity.Position) > targetDist then
-      orb.target = closestEnemy
-    else
+    local closestEnemyDist = math.huge
+    if not orb.target or not orb.target:Exists() then
+      if not enemies then
+        enemies = GetEnemiesInRange(player.Position, playerData.orbitRange.max)
+      end
       for _, enemy in pairs(enemies) do
         local dist = enemy.Position:DistanceSquared(orb.entity.Position)
         if dist < closestEnemyDist then
@@ -254,23 +289,34 @@ local function ExpandHomingTears(player, releaseOrbit)
           closestEnemyDist = dist
         end
       end
+      orb.target = closestEnemy
+    else
+      closestEnemy = orb.target
     end
-    local targetRadius = playerData.orbitRange.max
-    if closestEnemy then
+    local targetRadius = playerData.orbitRange.act
+    if orb.target then
       if releaseOrbit then
-        orb.entity.Velocity = (closestEnemy.Position - orb.entity.Position):Normalized() * player.ShotSpeed
+        orb.entity.Velocity = (orb.target.Position - orb.entity.Position):Normalized() * player.ShotSpeed
         playerData.tearOrbit:remove(hash)
       else
-        orb.target = closestEnemy
-        local direction = Utils.GetClockWiseSign(player.Position, closestEnemy)
-        orb.direction = orb.direction + direction * 0.1
-        targetRadius = math.min(closestEnemy.Position:Distance(player.Position), playerData.orbitRange.max)
+        local clockWiseSign = Utils.GetClockwiseSign2(player.Position, orb.entity.Position, orb.target.Position)
+        orb.direction = orb.direction + clockWiseSign * 0.1
+        targetRadius = math.min(orb.target.Position:Distance(player.Position), playerData.orbitRange.max)
+        log:Value("radius", {
+          hash = hash,
+          distance = orb.target.Position:Distance(player.Position),
+          orbRange = orb.radius,
+          targetRadius = targetRadius,
+        })
       end
     end
-    if orb.radius < targetRadius then
-      orb.radius = orb.radius + player.ShotSpeed * RADIUS_STEP_MULTIPLIER
-    elseif orb.radius > targetRadius then
-      orb.radius = orb.radius - player.ShotSpeed * RADIUS_STEP_MULTIPLIER
+    local diff = targetRadius - orb.radius
+    if math.abs(diff) < epsilon then
+      orb.radius = targetRadius
+    elseif diff > 0 then
+      orb.radius = math.min(orb.radius + step, targetRadius)
+    else
+      orb.radius = math.max(orb.radius - step, targetRadius)
     end
   end
 end
@@ -279,11 +325,17 @@ end
 --- @param entityOrbit Orbit<EntityOrbital>
 local function ExpandOrbitingTears(player, entityOrbit)
   local playerData = GetPlayerData(player)
+  local step = player.ShotSpeed * RADIUS_STEP_MULTIPLIER
+  local target = playerData.orbitRange.act
+  local epsilon = 0.5
   for _, orb in pairs(entityOrbit.list) do
-    if orb.radius < playerData.orbitRange.act then
-      orb.radius = orb.radius + player.ShotSpeed * RADIUS_STEP_MULTIPLIER
-    elseif orb.radius > playerData.orbitRange.act then
-      orb.radius = orb.radius - player.ShotSpeed * RADIUS_STEP_MULTIPLIER
+    local diff = target - orb.radius
+    if math.abs(diff) < epsilon then
+      orb.radius = target
+    elseif diff > 0 then
+      orb.radius = math.min(orb.radius + step, target)
+    else
+      orb.radius = math.max(orb.radius - step, target)
     end
   end
 end
@@ -294,13 +346,13 @@ local function ExplodeOrbitingTears(player, entityOrbit)
   for _, orb in pairs(entityOrbit.list) do
     local explosion = SpawnEntity(
       EntityType.ENTITY_BOMB,
-      BombVariant.BOMB_ROCKET,
+      BombVariant.BOMB_NORMAL,
       orb.entity.Position,
       Vector.Zero,
       player
     ):ToBomb()
     if explosion then
-      -- explosion:SetExplosionCountdown(0)
+      explosion:SetExplosionCountdown(0)
     end
     orb.entity:Remove()
   end
@@ -363,7 +415,6 @@ local function SpawnBulletWall(player, spawnPos, velocity)
   if not proj then return end
   wallProjectiles[GetPtrHash(proj)] = proj
   proj:AddProjectileFlags(ProjectileFlags.GHOST | ProjectileFlags.CANT_HIT_PLAYER)
-  log:Value("projFlags", log:Flag("projectile", proj.ProjectileFlags))
   proj.FallingAccel = -0.1
   proj.FallingSpeed = 0
   -- proj.CollisionDamage = player.Damage
@@ -582,12 +633,9 @@ local function TryAbsorbTears(player)
           tear = player:FireTear(proj.Position, proj.Velocity, true, true, true)
         end
         proj:Remove()
-        -- LogEnum("tearVariant", tear.Variant)
-        -- LogFlag("tearFlags", tear.TearFlags)
         -- tear.TearFlags = tear.TearFlags | TearFlags.TEAR_ORBIT
         if tear then
           local orb = GetPlayerData(player).tearOrbit:add(player, tear --[[@as EntityTear]])
-
           CalculatePostTearSynergies(player, orb)
         end
       elseif not playerData.projOrbit.list[projHash] then
@@ -663,7 +711,7 @@ local function UpdateOrbitingTears(player)
     local aimDir = player:GetAimDirection()
 		local fireDir = player:GetFireDirection()
     log:Value("input", {
-      shootingInput = input.X .. ", " .. input.Y,
+      -- shootingInput = input.X .. ", " .. input.Y,
       aimDir = aimDir.X .. ", " .. aimDir.Y,
       fireDir = fireDir,
     })
@@ -674,8 +722,10 @@ local function UpdateOrbitingTears(player)
     end
     return
   end
-  if player:HasCollectible(CollectibleType.COLLECTIBLE_EPIC_FETUS) and player.FireDelay == 0 then
-    ExplodeOrbitingTears(player, playerData.tearOrbit)
+  if player:HasCollectible(CollectibleType.COLLECTIBLE_EPIC_FETUS) then
+    if player:GetShootingInput():Length() > 0 then
+      ExplodeOrbitingTears(player, playerData.tearOrbit)
+    end
   end
   
   PurgeOrbitingEntities(playerData.tearOrbit, gameFrameCount)
@@ -696,14 +746,15 @@ local function UpdateOrbitingTears(player)
       player:HasCollectible(CollectibleType.COLLECTIBLE_GODHEAD)
     ) then
       ExpandHomingTears(player)
-    elseif player:HasTrinket(TrinketType.TRINKET_BRAIN_WORM) then
-      ExpandHomingTears(player, true)
     else
+      if player:HasTrinket(TrinketType.TRINKET_BRAIN_WORM) and gameFrameCount % 8 == 0 then
+        ReleaseHomingTears(player)
+      end
       ExpandOrbitingTears(player, playerData.tearOrbit)
     end
     SpinOrbitingTears(player, playerData.tearOrbit)
     local hasPop = player:HasCollectible(CollectibleType.COLLECTIBLE_POP)
-    if (hasPop and gameFrameCount % 3 == 0) then -- artificial delay for the pop effect
+    if (hasPop and gameFrameCount % 4 == 0) then -- artificial delay for the pop effect
       CheckOrbitingTearCollisions(playerData.tearOrbit, playerData.orbitRange.act)
     end
   end
@@ -910,19 +961,18 @@ function theSunMod:HandleTearUpdate(tear)
   local hash = GetPtrHash(tear)
   if tearsToCheck[hash] then
     tearsToCheck[hash] = nil
-    local player tear.SpawnerEntity:ToPlayer()
+    local player = tear.SpawnerEntity:ToPlayer()
     if not player or not IsTheSun(player) then return end
-    
-    log:Value("HandleTearFired", {
-      flags = log:Flag("tear", tear.TearFlags),
-      variant = log:Enum("tear", tear.Variant),
-    })
-    
     local color = Utils.GetColorOffset(tear)
 
     if color then
-      local newOrb = GetPlayerData(player).tearOrbit:add(player, tear)
-      newOrb.direction = newOrb.direction * Utils.colorOffsets[color].rangeMultiplier
+      local playerData = GetPlayerData(player)
+      if (playerData.tearOrbit:hasSpace()) then
+        local newOrb = playerData.tearOrbit:add(player, tear)
+        newOrb.direction = newOrb.direction * Utils.colorOffsets[color].rangeMultiplier
+      else
+        tear.Velocity = tear.Velocity * 10
+      end
     end
   end
 end
@@ -1011,12 +1061,12 @@ theSunMod:AddCallback(ModCallbacks.MC_POST_PROJECTILE_INIT, theSunMod.HandleProj
 
 --- @param knife EntityKnife
 function theSunMod:HandleKnifeInit(knife)
-  log:Value("HandleKnifeInit", {
-    flags = log:Flag("proj", knife.TearFlags),
-    variant = knife.Variant, -- log:Enum("proj", proj.Variant),
-    rotation = knife.Rotation,
-    rotationOffset = knife.RotationOffset,
-  })
+  -- log:Value("HandleKnifeInit", {
+  --   flags = log:Flag("proj", knife.TearFlags),
+  --   variant = knife.Variant, -- log:Enum("proj", proj.Variant),
+  --   rotation = knife.Rotation,
+  --   rotationOffset = knife.RotationOffset,
+  -- })
 end
 
 theSunMod:AddCallback(ModCallbacks.MC_POST_KNIFE_INIT, theSunMod.HandleKnifeInit)
@@ -1025,10 +1075,12 @@ theSunMod:AddCallback(ModCallbacks.MC_POST_KNIFE_INIT, theSunMod.HandleKnifeInit
 
 --- @param tear EntityTear
 function theSunMod:HandleFireTear(tear, player)
-  log:Value("HandleTearFired", {
-    flags = log:Flag("tear", tear.TearFlags),
-    variant = log:Enum("tear", tear.Variant),
-  })
+  -- log:Value("tear", {
+  --   Variant = log:Enum("tear", tear.Variant),
+  --   Flags = log:Flag("tear", tear.TearFlags),
+  --   collision = tear.CollisionDamage,
+  --   base = tear.BaseDamage,
+  -- })
 end
 theSunMod:AddCallback(ModCallbacks.MC_POST_FIRE_TEAR, theSunMod.HandleFireTear)
 

@@ -15,6 +15,18 @@ function Utils.GetClockWiseSign(playerPos, proj)
   end
 end
 
+---Calcula el signo para saber si orb debe girar horario o antihorario
+---@param center Vector -- centro de la órbita (player.Position)
+---@param current Vector -- posición actual de la lágrima (orb.position)
+---@param target Vector -- posición del objetivo (orb.target.position)
+---@return integer -- 1 si debe girar antihorario, -1 si horario
+function Utils.GetClockwiseSign2(center, current, target)
+  local v1 = current - center
+  local v2 = target - center
+  local cross = v1.X * v2.Y - v1.Y * v2.X
+  return (cross > 0) and 1 or -1
+end
+
 --- @param pos1 Vector
 --- @param pos2 Vector
 --- @return number
