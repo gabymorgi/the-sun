@@ -218,6 +218,17 @@ local function GetPlayerData(player)
   return PlayerData[playerHash]
 end
 
+local activeBars = {}
+
+-- Helpers -------------
+local function addBar(id, maxCharge, spritePath)
+  activeBars[id] = ChargeBar.new(maxCharge, spritePath)
+end
+
+local function removeBar(id)
+  activeBars[id] = nil
+end
+
 ---@param player EntityPlayer
 local function CachePlayerCollectibles(player)
   local playerData = GetPlayerData(player)
@@ -240,6 +251,15 @@ local function CachePlayerCollectibles(player)
     playerData.cacheCollectibles[CollectibleType.COLLECTIBLE_IPECAC] = value
     playerData.orbitRange.min = value and 100 or GRID_SIZE
     playerData.orbitRange.act = Utils.Clamp(playerData.orbitRange.act, playerData.orbitRange.min, playerData.orbitRange.max)
+  end
+  value = player:HasCollectible(CollectibleType.COLLECTIBLE_KIDNEY_STONE)
+  if value ~= playerData.cacheCollectibles[CollectibleType.COLLECTIBLE_KIDNEY_STONE] then
+    playerData.cacheCollectibles[CollectibleType.COLLECTIBLE_KIDNEY_STONE] = value
+    if value then
+      addBar(CollectibleType.COLLECTIBLE_KIDNEY_STONE, 75)
+    else
+      removeBar(CollectibleType.COLLECTIBLE_KIDNEY_STONE)
+    end
   end
   -- more collectibles
   if evaluate then
@@ -870,6 +890,26 @@ local function HandleRoomEnter()
 end
 theSunMod:AddCallback(ModCallbacks.MC_POST_NEW_ROOM, HandleRoomEnter)
 
+---@param bomb EntityBomb
+---@param collider Entity
+function theSunMod:OnBombCollision(bomb, collider)
+  -- log:Value("OnBombCollision", {
+  --   flags = log:Flag("tear", tear.TearFlags),
+  --   variant = log:Enum("tear", tear.Variant),
+  --   collision = tear.CollisionDamage,
+  -- })
+  local player = bomb.SpawnerEntity:ToPlayer()
+  if not player or not IsTheSun(player) then
+    return
+  end
+  local playerData = GetPlayerData(player)
+  local bombHash = GetPtrHash(bomb)
+  if playerData.tearOrbit.list[bombHash] then
+    playerData.tearOrbit:remove(bombHash)
+  end
+end
+theSunMod:AddCallback(ModCallbacks.MC_PRE_BOMB_COLLISION, theSunMod.OnBombCollision)
+
 ---@param tear EntityTear
 ---@param collider Entity
 function theSunMod:OnTearCollision(tear, collider)
@@ -905,11 +945,18 @@ function theSunMod:OnTearCollision(tear, collider)
     end
   end
 end
-
 theSunMod:AddCallback(ModCallbacks.MC_PRE_TEAR_COLLISION, theSunMod.OnTearCollision)
 
 function theSunMod:OnUpdate()
   local players = GetPlayers()
+  local bar = activeBars[CollectibleType.COLLECTIBLE_KIDNEY_STONE]
+  if bar then
+    bar:add(1)
+    if bar:isFull() then
+      players[1]:FireKnife(players[1], 0, false, 0, 0)
+      bar:set(0)
+    end
+  end
 
   if #players > 0 then
     local room = game:GetRoom()
@@ -945,22 +992,10 @@ function theSunMod:OnUsePill(pillEffect, player, _)
 end
 theSunMod:AddCallback(ModCallbacks.MC_USE_PILL, theSunMod.OnUsePill)
 
---- Accessing the initialized entity does provide incomplete data in some use cases
---- @param tear EntityTear
-function theSunMod:HandleTearInit(tear)
-  local player = tear.SpawnerEntity:ToPlayer()
-  if not player or not IsTheSun(player) then return end
-  if player:HasCollectible(CollectibleType.COLLECTIBLE_ANGELIC_PRISM) then
-    tearsToCheck[GetPtrHash(tear)] = tear
-  end
-end
-theSunMod:AddCallback(ModCallbacks.MC_POST_TEAR_INIT, theSunMod.HandleTearInit, TearVariant.BLUE)
-
 --- @param tear EntityTear
 function theSunMod:HandleTearUpdate(tear)
-  local hash = GetPtrHash(tear)
-  if tearsToCheck[hash] then
-    tearsToCheck[hash] = nil
+  --- Accessing the initialized entity on MC_POST_TEAR_INIT does provide incomplete data in some use cases
+  if tear.FrameCount == 1 then
     local player = tear.SpawnerEntity:ToPlayer()
     if not player or not IsTheSun(player) then return end
     local color = Utils.GetColorOffset(tear)
@@ -1084,6 +1119,28 @@ function theSunMod:HandleFireTear(tear, player)
 end
 theSunMod:AddCallback(ModCallbacks.MC_POST_FIRE_TEAR, theSunMod.HandleFireTear)
 
+
+local RADIUS = 30 -- píxeles aprox. (ajústalo a gusto)
+theSunMod:AddCallback(ModCallbacks.MC_POST_PLAYER_RENDER, function(_, player)
+  -- Si el HUD está oculto no queremos renderizar nada
+  if not Game():GetHUD():IsVisible() then return end
+
+  local keys = {}          -- para mantener un orden estable
+  for k in pairs(activeBars) do table.insert(keys, k) end
+  table.sort(keys)
+
+  local n = #keys
+  for i, id in ipairs(keys) do
+    if i > 8 then break end                        -- seguridad; nunca más de 8
+    local angle = (i - 1) * 45                    -- 0°, 45°, 90°…
+    local offset = Vector.FromAngle(angle):Resized(RADIUS)
+    local scrPos = Isaac.WorldToScreen(player.Position + offset)
+
+    local bar = activeBars[id]
+    local charging = not bar:isFull()             -- lógica de ejemplo
+    bar:render(scrPos, charging)
+  end
+end)
 --------------------------------------------------------------------------------------------------
 
 local PLUTO_TYPE = Isaac.GetPlayerTypeByName("Pluto", true)
