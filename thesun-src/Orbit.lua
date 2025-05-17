@@ -88,7 +88,7 @@ end
 ---@diagnostic disable-next-line: duplicate-set-field
 function TearOrbit:remove(hash)
   local tear = self.list[hash].entity
-  if tear.Type == EntityType.ENTITY_TEAR then
+  if tear.Type == EntityType.ENTITY_TEAR and not tear.Variant == TearVariant.FETUS then
       -- tear.FallingSpeed = 0.5
       if not tear:HasTearFlags(TearFlags.TEAR_OCCULT) then
         tear.Velocity = tear.Velocity * 10

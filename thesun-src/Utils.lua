@@ -1,4 +1,42 @@
+---@type Const
+local Const = require("thesun-src.Const")
+
+---@class Utils
+---@field colorOffsets table<string, { colorOffset: number[], rangeMultiplier: number }>
+---@field GetColorOffset fun(tear: EntityTear): string | nil
+---@field GetClockWiseSign fun(playerPos: Vector, proj: Entity): number
+---@field GetClockwiseSign2 fun(center: Vector, current: Vector, target: Vector): number
+---@field GetAngle fun(pos1: Vector, pos2: Vector): number
+---@field Clamp fun(value: number, min: number, max: number): number
+---@field SpawnEntity fun(entityType: EntityType, variant: number, spawnPos: Vector, velocity: Vector, player?: EntityPlayer, subType?: number, seed?: number): Entity
+---@field IsTheSun fun(player: EntityPlayer): boolean
+---@field GetPlayers fun(): EntityPlayer[]
+---@field GetEnemiesInRange fun(position: Vector, radius: number): Entity[]
+---@field GetMarkedTarget fun(player: EntityPlayer): EntityEffect | nil
+---@field GetExtraBulletTrain fun(player: EntityPlayer): number
+---@field GetMarkedTarget fun(player: EntityPlayer): EntityEffect | nil
+---@field GetShootVector fun(player: EntityPlayer): Vector
+
 local Utils = {}
+
+---@param entityType EntityType
+---@param variant number
+---@param spawnPos Vector
+---@param velocity Vector
+---@param player? EntityPlayer
+---@param subType? number
+---@param seed? number
+function Utils.SpawnEntity(entityType, variant, spawnPos, velocity, player, subType, seed)
+  return Const.game:Spawn(
+    entityType,
+    variant,
+    spawnPos,
+    velocity,
+    player,
+    subType or 0,
+    seed or Const.game:GetRoom():GetSpawnSeed()
+  )
+end
 
 --- @param playerPos Vector
 --- @param proj Entity
@@ -61,6 +99,71 @@ function Utils.GetColorOffset(tear)
     end
   end
   return nil
+end
+
+---@param player EntityPlayer
+---@return boolean
+function Utils.IsTheSun(player)
+  if (player:GetPlayerType() == Const.TheSunType) then
+    return true
+  end
+  return false
+end
+
+-- for _,player in pairs(GetPlayers()) do
+--- @return EntityPlayer[]
+function Utils.GetPlayers()
+  local players = {}
+  for i = 0, Const.game:GetNumPlayers() - 1 do
+    local player = Const.game:GetPlayer(i)
+    if Utils.IsTheSun(player) then
+      table.insert(players, player)
+    end
+  end
+  return players
+end
+
+---@param position Vector
+---@param radius number
+---@return Entity[]
+function Utils.GetEnemiesInRange(position, radius)
+  local enemies = {}
+  for _, entity in pairs(Isaac.FindInRadius(position, radius, EntityPartition.ENEMY)) do
+    if entity:IsActiveEnemy() and entity:IsVulnerableEnemy() and not entity:HasEntityFlags(EntityFlag.FLAG_NO_TARGET) then
+      table.insert(enemies, entity)
+    end
+  end
+  return enemies
+end
+
+--- @param player EntityPlayer
+function Utils.GetMarkedTarget(player)
+	for _, entity in pairs(Isaac.FindByType(EntityType.ENTITY_EFFECT, EffectVariant.TARGET)) do
+		local spawner = entity.SpawnerEntity
+		
+		if spawner and GetPtrHash(spawner) == GetPtrHash(player) then
+			return entity:ToEffect()
+		end
+	end
+	return nil
+end
+
+local DIRECTION_MAP = {
+  [Direction.UP] = Vector(0,-1),
+  [Direction.LEFT] = Vector(-1,0),
+  [Direction.DOWN] = Vector(0,1),
+  [Direction.RIGHT] = Vector(1,0),
+  [Direction.NO_DIRECTION] = Vector(0,0)
+}
+
+---@param player EntityPlayer
+---@return Vector
+function Utils.GetShootVector(player)
+  if not player:HasCollectible(CollectibleType.COLLECTIBLE_ANALOG_STICK)then
+    return DIRECTION_MAP[player:GetFireDirection()]
+  else
+    return player:GetAimDirection()
+  end
 end
 
 return Utils

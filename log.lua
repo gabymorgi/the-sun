@@ -366,6 +366,41 @@ local flags = {
     "DEAD_BIRD",
     "GENERIC_TRACER",
     "ULTRA_DEATH_SCYTHE"
+  },
+  damageFlags = {
+    [0] = "DAMAGE_NOKILL",
+    "DAMAGE_FIRE",
+    "DAMAGE_EXPLOSION",
+    "DAMAGE_LASER",
+    "DAMAGE_ACID",
+    "DAMAGE_RED_HEARTS",
+    "DAMAGE_COUNTDOWN",
+    "DAMAGE_SPIKES",
+    "DAMAGE_CLONES",
+    "DAMAGE_POOP",
+    "DAMAGE_DEVIL",
+    "DAMAGE_ISSAC_HEART",
+    "DAMAGE_TNT",
+    "DAMAGE_INVINCIBLE",
+    "DAMAGE_SPAWN_FLY",
+    "DAMAGE_POISON_BURN",
+    "DAMAGE_CURSED_DOOR",
+    "DAMAGE_TIMER",
+    "DAMAGE_IV_BAG",
+    "DAMAGE_PITFALL",
+    "DAMAGE_CHEST",
+    "DAMAGE_FAKE",
+    "DAMAGE_BOOGER",
+    "DAMAGE_SPAWN_BLACK_HEART",
+    "DAMAGE_CRUSH",
+    "DAMAGE_NO_MODIFIERS",
+    "DAMAGE_SPAWN_RED_HEART",
+    "DAMAGE_SPAWN_COIN",
+    "DAMAGE_NO_PENALTIES",
+    "DAMAGE_SPAWN_TEMP_HEART",
+    "DAMAGE_IGNORE_ARMOR",
+    "DAMAGE_SPAWN_CARD",
+    "DAMAGE_SPAWN_RUNE",
   }
 }
 
@@ -373,7 +408,7 @@ local flags = {
 --- @param type string
 --- @param bitSet BitSet128 | any
 --- @return string
-function log:Flag(type, bitSet)
+function log.Flag(type, bitSet)
   local flagKey = type .. "Flags"
   local result = {}
   local map = flags[flagKey]
@@ -401,7 +436,7 @@ end
 --- @param type string
 --- @param enumValue number
 --- @return string
-function log:Enum(type, enumValue)
+function log.Enum(type, enumValue)
   local flagKey = type .. "Variant"
   local map = flags[flagKey]
   if not map then
@@ -413,12 +448,12 @@ end
 
 --- @param tbl table
 --- @param indent? number
-function log:Table(tbl, indent)
+function log.Table(tbl, indent)
   indent = indent or 0
   local str = string.rep("  ", indent) .. "{\n"
   for k, v in pairs(tbl) do
     local kStr = tostring(k)
-    local vStr = type(v) == "table" and log:Table(v, indent + 1) or tostring(v)
+    local vStr = type(v) == "table" and log.Table(v, indent + 1) or tostring(v)
     str = str .. string.rep("  ", indent + 1) .. kStr .. " = " .. vStr .. ",\n"
   end
   str = str .. string.rep("  ", indent) .. "}"
@@ -427,7 +462,7 @@ end
 
 --- @param tag string
 --- @param value any
-function log:Value(tag, value)
+function log.Value(tag, value)
   if type(value) == "table" then
     Isaac.DebugString("the-sun " .. tag .. ": " .. log:Table(value))
   else
