@@ -1,8 +1,9 @@
+local log = require("log")
+
 ---@class ChargeBar
 ---@field maxCharge number
 ---@field charge number
 ---@field sprite Sprite
----@field get fun(self: ChargeBar): number
 ---@field set fun(self: ChargeBar, value: number): nil
 ---@field add fun(self: ChargeBar, delta: number): nil
 ---@field isFull fun(self: ChargeBar): boolean
@@ -29,10 +30,6 @@ function ChargeBar:new(maxCharge, spritePath)
 
   return obj
 end
----@return number
-function ChargeBar:get()
-  return self.charge
-end
 ---@param value number
 function ChargeBar:set(value)
   self.charge = math.min(value, self.maxCharge)
@@ -47,20 +44,25 @@ end
 function ChargeBar:percent()
   return self.charge / self.maxCharge * 100
 end
-
+local preCharge = 0
 ---@param screenPos Vector
----@param isCharging boolean
-function ChargeBar:render(screenPos, isCharging)
-  local p = self:percent()
+function ChargeBar:render(screenPos)
+  if preCharge ~= self.charge then
+    preCharge = self.charge
+    local p = self:percent()
 
-  if isCharging then
-    if p < 99 then
-      self.sprite:SetFrame("Charging", math.floor(p))
-    elseif not self.sprite:IsPlaying("Charged") then
-      self.sprite:Play("Charged", true)
+    if p > 0 then
+      if p < 99 then
+        --log.Value("Charging", p)
+        self.sprite:SetFrame("Charging", math.floor(p))
+      elseif not self.sprite:IsPlaying("Charged") then
+        --log.Value("Charged", p)
+        self.sprite:Play("Charged", true)
+      end
+    elseif not self.sprite:IsPlaying("Disappear") then
+      --log.Value("Disappear", p)
+      self.sprite:Play("Disappear", true)
     end
-  elseif not self.sprite:IsPlaying("Disappear") then
-    self.sprite:Play("Disappear", true)
   end
 
   self.sprite:Render(screenPos, Vector.Zero, Vector.Zero)

@@ -1,3 +1,4 @@
+local log = include("log")
 ---@type Store
 local Store = require("thesun-src.Store")
 ---@type Const
@@ -89,7 +90,7 @@ end
 function WallFire.SpawnBulletWall(player, spawnPos, velocity)
   local proj = Utils.SpawnEntity(
     EntityType.ENTITY_PROJECTILE,
-    ProjectileVariant.PROJECTILE_TEAR,
+    ProjectileVariant.PROJECTILE_NORMAL,
     spawnPos,
     velocity,
     player
@@ -99,9 +100,7 @@ function WallFire.SpawnBulletWall(player, spawnPos, velocity)
   proj:AddProjectileFlags(ProjectileFlags.GHOST | ProjectileFlags.CANT_HIT_PLAYER)
   proj.FallingAccel = -0.1
   proj.FallingSpeed = 0
-  -- proj.CollisionDamage = player.Damage
-  -- proj.Size = GetProjectileSize(player.Damage)
-  proj.Scale = 0.5   -- GetProjectileScale(player.Damage)
+  proj.Scale = 0.25   -- GetProjectileScale(player.Damage)
 end
 
 ---@param player EntityPlayer
@@ -239,3 +238,5 @@ function WallFire.ClusterWallShot(player)
 
   wallDirection = (wallDirection + 1) % 4
 end
+
+return WallFire

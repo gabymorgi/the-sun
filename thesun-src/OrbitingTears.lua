@@ -7,6 +7,8 @@ local Const = require("thesun-src.Const")
 local Utils = include("thesun-src.Utils")
 ---@type Store
 local Store = require("thesun-src.Store")
+---@type WormEffects
+WormEffects = include("thesun-src.WormEffects")
 
 ---@class OrbitingTears
 ---@field ReleaseHomingTears fun(player: EntityPlayer)
@@ -24,6 +26,15 @@ local Store = require("thesun-src.Store")
 ---@field UpdateOrbitingEntities fun(player: EntityPlayer)
 
 local OrbitingTears = {}
+
+---@param ludodivo Ludovico
+---@param mult number
+function AddLudoMult(ludodivo, mult)
+  local step = mult * 0.1
+  ludodivo.Multiplier = ludodivo.Multiplier + step
+  ludodivo.Tear.Scale = ludodivo.Tear.Scale + step
+  ludodivo.Tear.CollisionDamage = ludodivo.BaseDamage * ludodivo.Multiplier
+end
 
 --- @param player EntityPlayer
 function OrbitingTears.ReleaseHomingTears(player)
@@ -138,20 +149,39 @@ function OrbitingTears.ExplodeOrbitingTears(player, entityOrbit)
 end
 
 --- @param player EntityPlayer
---- @param entityOrbit Orbit<EntityOrbital>
-function OrbitingTears.SpinOrbitingTears(player, entityOrbit)
-  for _, orb in pairs(entityOrbit.list) do
-    local vel = player.ShotSpeed / math.sqrt(orb.radius)
+--- @param entityOrbit Orbit<Entity>
+--- @param checkWorm boolean?
+function OrbitingTears.SpinOrbitingTears(player, entityOrbit, checkWorm)
+  local playerData = PlayerUtils.GetPlayerData(player)
+  for hash, orb in pairs(entityOrbit.list) do
+    local vel = player.ShotSpeed * Utils.FastInvSqrt(orb.radius)
     orb.angle = orb.angle + orb.direction * vel
-    local offset = Vector(math.cos(orb.angle), math.sin(orb.angle)) * orb.radius
-    local targetPos = player.Position + offset
-    if true then
-      orb.entity.Position = targetPos
-      -- tear orientation
-      local tangentAngle = orb.angle + orb.direction * Const.HALF_PI
-      orb.entity.Velocity = Vector(math.cos(tangentAngle), math.sin(tangentAngle))
+    local angle, radius = checkWorm and WormEffects.GetModifiedOrbit(orb) or orb.angle, orb.radius
+    local offset
+    if playerData.cacheCollectibles[CollectibleType.COLLECTIBLE_TRACTOR_BEAM] then
+      offset = Utils.GetFlattenedOrbitPosition(player, angle, radius)
     else
-      orb.entity.Velocity = (targetPos - orb.entity.Position) * 0.5
+      offset = Vector(math.cos(angle), math.sin(angle)) * radius
+    end
+    local targetPos = player.Position + offset
+    orb.entity.Velocity = (targetPos - orb.entity.Position) * 0.5
+  end
+end
+
+--- @param player EntityPlayer
+function OrbitingTears.UpdateAntiGravityTears(player)
+  local playerData = PlayerUtils.GetPlayerData(player)
+  for _, tear in pairs(playerData.antigravityTears) do
+    if tear:Exists() then
+      if tear.FrameCount > 60 then
+        local orb = playerData.tearOrbit:add(player, tear, Const.game:GetFrameCount() - 60)
+        OrbitingTears.CalculatePostTearSynergies(player, orb)
+        playerData.antigravityTears[GetPtrHash(tear)] = nil
+      else
+        tear.Velocity = Vector.Zero
+      end
+    else
+      tear:Remove()
     end
   end
 end
@@ -282,6 +312,20 @@ function OrbitingTears.CalculatePostTearSynergies(player, orb)
   if player:HasCollectible(CollectibleType.COLLECTIBLE_PROPTOSIS) then
     orb.direction = orb.direction * 2
   end
+
+  if player:HasTrinket(TrinketType.TRINKET_TORN_CARD) then
+    local playerData = PlayerUtils.GetPlayerData(player)
+    playerData.tornCardCount = playerData.tornCardCount + 1
+    if playerData.tornCardCount > 15 then
+      playerData.tornCardCount = 0
+      local tear = player:FireTear(player.Position, orb.entity.Velocity, false, true, false)
+      tear:AddTearFlags(TearFlags.TEAR_EXPLOSIVE | TearFlags.TEAR_BOOMERANG)
+      tear.Size = 8
+      tear.Color = Color(0.5, 0.9, 0.4, 1)
+      tear.CollisionDamage = 40
+      playerData.tearOrbit:add(player, tear)
+    end
+  end
 end
 
 --- @param player EntityPlayer
@@ -292,36 +336,68 @@ function OrbitingTears.TryAbsorbTears(player)
     if proj and OrbitingTears.IsProjectileBehindPlayer(player.Position, proj) then
       local playerData = PlayerUtils.GetPlayerData(player)
       local projHash = GetPtrHash(proj)
-      if Store.WallProjectiles[projHash] then
+      if player:HasCollectible(CollectibleType.COLLECTIBLE_BIRTHRIGHT) or Store.WallProjectiles[projHash] then
         if not playerData.tearOrbit:hasSpace() then
           proj:Remove()
           goto continue
         end
         local tear
         local multiplier = 1
-        if player:HasCollectible(CollectibleType.COLLECTIBLE_C_SECTION) then
+        local hasCSection = player:HasCollectible(CollectibleType.COLLECTIBLE_C_SECTION)
+        if hasCSection then
           multiplier = 0.75
         end
         if player:HasCollectible(CollectibleType.COLLECTIBLE_CHOCOLATE_MILK) then
-          multiplier = multiplier * (4 / playerData.tearOrbit.length + 1)
+          multiplier = multiplier * (4 / (playerData.tearOrbit.length + 1))
         end
-        if player:HasCollectible(CollectibleType.COLLECTIBLE_SPIRIT_SWORD) then
-          tear = player:FireKnife(player, 0, false, KnifeVariant.SPIRIT_SWORD, 0)
-        elseif player:HasCollectible(CollectibleType.COLLECTIBLE_LUDOVICO_TECHNIQUE) and playerData.ludodivo then
-          tear = playerData.ludodivo.Tear
-          playerData.ludodivo.Multiplier = playerData.ludodivo.Multiplier + 0.1
-          playerData.ludodivo.Tear.CollisionDamage = playerData.ludodivo.BaseDamage * playerData.ludodivo.Multiplier
-          table.insert(playerData.ludodivo.ExpFrames, Const.game:GetFrameCount() + 30 * Const.FPS)
+        if player:HasCollectible(CollectibleType.COLLECTIBLE_LUDOVICO_TECHNIQUE) and playerData.ludodivo then
+          AddLudoMult(playerData.ludodivo, 1)
+          table.insert(playerData.ludodivo.ExpFrames, Const.game:GetFrameCount() + player.TearRange)
         elseif player:HasCollectible(CollectibleType.COLLECTIBLE_DR_FETUS) then
           tear = player:FireBomb(proj.Position, proj.Velocity, player)
-        elseif player:HasCollectible(CollectibleType.COLLECTIBLE_TECHNOLOGY) then
-          tear = player:FireTechXLaser(proj.Position, Vector.Zero, playerData.orbitRange.act, player, multiplier)
-          tear.Timeout = 5
-          tear.OneHit = true
+        elseif player:HasCollectible(CollectibleType.COLLECTIBLE_TECHNOLOGY) and (not hasCSection) then
+          local nearestEnemy = Utils.GetClosestEnemies(player.Position)
+          if nearestEnemy then
+            local direction = (nearestEnemy.Position - player.Position):Normalized()
+            local laser = player:FireTechLaser(proj.Position, LaserOffset.LASER_TECH1_OFFSET, direction, false, true,
+            player, multiplier)
+            laser:SetMaxDistance(playerData.orbitRange.max)
+          end
+        elseif (
+          player:HasCollectible(CollectibleType.COLLECTIBLE_TECH_X) or
+          player:HasCollectible(CollectibleType.COLLECTIBLE_BRIMSTONE) or
+          player:GetEffects():HasTrinketEffect(TrinketType.TRINKET_AZAZELS_STUMP)
+        ) then
+          tear = player:FireTechXLaser(proj.Position, Vector.Zero, 5, player, multiplier)
+        elseif player:HasCollectible(CollectibleType.COLLECTIBLE_MOMS_KNIFE) then
+          local a = Isaac.Spawn(EntityType.ENTITY_KNIFE, 0, 0, player.Position, Vector.Zero, player):ToKnife()
+          a.Visible = true
+          a.Parent = player
+
+          -- local a = player:FireKnife(player)
+          -- a:Shoot(1, 10)
         else
           tear = player:FireTear(proj.Position, proj.Velocity, true, true, true, player, multiplier)
+          if player:HasCollectible(CollectibleType.COLLECTIBLE_SPIRIT_SWORD) then
+            tear:ChangeVariant(TearVariant.SWORD_BEAM)
+          end
+          if player:HasCollectible(CollectibleType.COLLECTIBLE_ANTI_GRAVITY) then
+            playerData.antigravityTears[GetPtrHash(tear)] = tear
+            tear.FallingAcceleration = -0.1
+            tear = nil
+          end
         end
         proj:Remove()
+        if player:HasCollectible(CollectibleType.COLLECTIBLE_TECHNOLOGY_2) then
+          local extra = math.max(1, math.ceil(player.MaxFireDelay))
+          if (playerData.technologyTwoLaser and playerData.technologyTwoLaser:Exists()) then
+            playerData.technologyTwoLaser:SetTimeout(playerData.technologyTwoLaser.Timeout + extra)
+          else
+            local laser = player:FireTechXLaser(proj.Position, Vector.Zero, 100, player, 0.1)
+            laser:SetTimeout(extra)
+            playerData.technologyTwoLaser = laser
+          end
+        end
         -- tear.TearFlags = tear.TearFlags | TearFlags.TEAR_ORBIT
         if tear then
           local orb = PlayerUtils.GetPlayerData(player).tearOrbit:add(player, tear --[[@as EntityTear]])
@@ -396,20 +472,20 @@ function OrbitingTears.UpdateOrbitingTears(player)
   local playerData = PlayerUtils.GetPlayerData(player)
   local gameFrameCount = Const.game:GetFrameCount()
   if player:HasCollectible(CollectibleType.COLLECTIBLE_LUDOVICO_TECHNIQUE) and playerData.ludodivo then
-    local input = player:GetShootingInput()
-    local aimDir = player:GetAimDirection()
-		local fireDir = player:GetFireDirection()
-    log.Value("input", {
-      -- shootingInput = input.X .. ", " .. input.Y,
-      aimDir = aimDir.X .. ", " .. aimDir.Y,
-      fireDir = fireDir,
-    })
+    local input = player:GetAimDirection()
+    if playerData.ludodivo.Tear then
+      playerData.ludodivo.Tear.Velocity = input * player.ShotSpeed * 10
+    end
     if (playerData.ludodivo.ExpFrames[playerData.ludodivo.Index] and playerData.ludodivo.ExpFrames[playerData.ludodivo.Index] < gameFrameCount) then
       playerData.ludodivo.Index = playerData.ludodivo.Index + 1
-      playerData.ludodivo.Multiplier = playerData.ludodivo.Multiplier - 0.1
-      playerData.ludodivo.Tear.CollisionDamage = playerData.ludodivo.BaseDamage * playerData.ludodivo.Multiplier
+      AddLudoMult(playerData.ludodivo, -1)
     end
     return
+  end
+  if playerData.technologyTwoLaser then
+    if playerData.technologyTwoLaser:Exists() then
+      playerData.technologyTwoLaser.Position = player.Position
+    end
   end
   if player:HasCollectible(CollectibleType.COLLECTIBLE_EPIC_FETUS) then
     if player:GetShootingInput():Length() > 0 then
@@ -418,6 +494,7 @@ function OrbitingTears.UpdateOrbitingTears(player)
   end
   
   OrbitingTears.PurgeOrbitingEntities(playerData.tearOrbit, gameFrameCount)
+  OrbitingTears.UpdateAntiGravityTears(player)
   if playerData.activeBars[CollectibleType.COLLECTIBLE_CURSED_EYE] then
     local bar = playerData.activeBars[CollectibleType.COLLECTIBLE_CURSED_EYE]
     bar:set(playerData.tearOrbit.length + playerData.projOrbit.length)
@@ -447,7 +524,7 @@ function OrbitingTears.UpdateOrbitingTears(player)
       end
       OrbitingTears.ExpandOrbitingTears(player, playerData.tearOrbit)
     end
-    OrbitingTears.SpinOrbitingTears(player, playerData.tearOrbit)
+    OrbitingTears.SpinOrbitingTears(player, playerData.tearOrbit, true)
     local hasPop = player:HasCollectible(CollectibleType.COLLECTIBLE_POP)
     if (hasPop and gameFrameCount % 4 == 0) then -- artificial delay for the pop effect
       OrbitingTears.CheckOrbitingTearCollisions(playerData.tearOrbit, playerData.orbitRange.act)

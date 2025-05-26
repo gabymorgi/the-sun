@@ -7,15 +7,20 @@ local Const = require("thesun-src.Const")
 ---@field GetClockWiseSign fun(playerPos: Vector, proj: Entity): number
 ---@field GetClockwiseSign2 fun(center: Vector, current: Vector, target: Vector): number
 ---@field GetAngle fun(pos1: Vector, pos2: Vector): number
+---@field FastInvSqrt fun(x: number): number
+---@field FastSqrt fun(x: number): number
 ---@field Clamp fun(value: number, min: number, max: number): number
 ---@field SpawnEntity fun(entityType: EntityType, variant: number, spawnPos: Vector, velocity: Vector, player?: EntityPlayer, subType?: number, seed?: number): Entity
 ---@field IsTheSun fun(player: EntityPlayer): boolean
 ---@field GetPlayers fun(): EntityPlayer[]
 ---@field GetEnemiesInRange fun(position: Vector, radius: number): Entity[]
+---@field GetClosestEnemies fun(position: Vector): Entity?
 ---@field GetMarkedTarget fun(player: EntityPlayer): EntityEffect | nil
 ---@field GetExtraBulletTrain fun(player: EntityPlayer): number
 ---@field GetMarkedTarget fun(player: EntityPlayer): EntityEffect | nil
+---@field GetHeadVector fun(player: EntityPlayer): Vector
 ---@field GetShootVector fun(player: EntityPlayer): Vector
+---@field GetFlattenedOrbitPosition fun(player: EntityPlayer, angle: number, radius: number): Vector
 
 local Utils = {}
 
@@ -70,6 +75,27 @@ end
 --- @return number
 function Utils.GetAngle(pos1, pos2)
   return math.atan(pos2.Y - pos1.Y, pos2.X - pos1.X)
+end
+
+-- Devuelve aproximadamente 1 / sqrt(x)
+---@param x number
+---@return number
+function Utils.FastInvSqrt(x)
+  local threehalfs = 1.5
+  local x2 = x * 0.5
+  local y = x
+  local i = string.unpack("I4", string.pack("f", y))
+  i = 0x5f3759df - (i >> 1)
+  y = string.unpack("f", string.pack("I4", i))
+  y = y * (threehalfs - (x2 * y * y))
+  return y
+end
+
+-- Para obtener sqrt(x)
+---@param x number
+---@return number
+function Utils.FastSqrt(x)
+  return x * Utils.FastInvSqrt(x)
 end
 
 ---@param value number
@@ -136,6 +162,23 @@ function Utils.GetEnemiesInRange(position, radius)
   return enemies
 end
 
+---@param position Vector
+---@return Entity?
+function Utils.GetClosestEnemies(position)
+  local nearestEnemy
+  local minDist = math.huge
+  for _, entity in ipairs(Isaac.GetRoomEntities()) do
+    if entity:IsVulnerableEnemy() and not entity:IsDead() then
+      local dist = position:DistanceSquared(entity.Position)
+      if dist < minDist then
+        minDist = dist
+        nearestEnemy = entity
+      end
+    end
+  end
+  return nearestEnemy
+end
+
 --- @param player EntityPlayer
 function Utils.GetMarkedTarget(player)
 	for _, entity in pairs(Isaac.FindByType(EntityType.ENTITY_EFFECT, EffectVariant.TARGET)) do
@@ -158,12 +201,38 @@ local DIRECTION_MAP = {
 
 ---@param player EntityPlayer
 ---@return Vector
-function Utils.GetShootVector(player)
+function Utils.GetHeadVector(player)
   if not player:HasCollectible(CollectibleType.COLLECTIBLE_ANALOG_STICK)then
-    return DIRECTION_MAP[player:GetFireDirection()]
+    local fireDirection = player:GetFireDirection()
+    if fireDirection == Direction.NO_DIRECTION then
+      return DIRECTION_MAP[player:GetHeadDirection()]
+    else
+      return DIRECTION_MAP[fireDirection]
+    end
   else
     return player:GetAimDirection()
   end
+end
+
+---@param player EntityPlayer
+---@return Vector
+function Utils.GetShootVector(player)
+  if not player:HasCollectible(CollectibleType.COLLECTIBLE_ANALOG_STICK) then
+    local fireDirection = player:GetFireDirection()
+    return DIRECTION_MAP[fireDirection]
+  else
+    return player:GetAimDirection()
+  end
+end
+
+function Utils.GetFlattenedOrbitPosition(player, angle, radius)
+  local aim = Utils.GetHeadVector(player) -- :Normalized()
+  local perp = Vector(-aim.Y, aim.X) -- Vector perpendicular al de disparo
+
+  local x = math.cos(angle) * radius
+  local y = math.sin(angle) * radius * 0.3 -- 1 normal, 0 plano
+
+  return aim * x + perp * y
 end
 
 return Utils

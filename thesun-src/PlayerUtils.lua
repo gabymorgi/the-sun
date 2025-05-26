@@ -14,6 +14,13 @@ local ProjectileOrbit = Orbit.ProjectileOrbit
 ---@type Orbit<EntityEffect>
 local EffectOrbit = Orbit.EffectOrbit
 
+---@class Ludovico 
+---@field Tear EntityTear
+---@field BaseDamage number
+---@field Multiplier number
+---@field ExpFrames number[]
+---@field Index number
+
 ---@class PlayerData
 ---@field tearOrbit Orbit<EntityTear>
 ---@field projOrbit Orbit<EntityProjectile>
@@ -21,9 +28,13 @@ local EffectOrbit = Orbit.EffectOrbit
 ---@field orbitRange { min: number, max: number, act: number }
 ---@field cacheCollectibles Dict<number | boolean>
 ---@field activeBars Dict<ChargeBar>
+---@field kidneyStoneFrame number
 ---@field leadPencilCount number
+---@field tornCardCount number
 ---@field friendlySpiderCount number
 ---@field wizardRemainingFrames number
+---@field technologyTwoLaser EntityLaser | nil
+---@field antigravityTears Dict<EntityTear>
 ---@field ludodivo Ludovico | nil
 
 ---@class PlayerUtils
@@ -49,13 +60,38 @@ function PlayerUtils.GetPlayerData(player)
       },
       cacheCollectibles = {},
       activeBars = {},
+      kidneyStoneFrame = 0,
       leadPencilCount = 0,
+      tornCardCount = 0,
       friendlySpiderCount = 0,
       wizardRemainingFrames = 0,
-      ludodivo = nil,
+      antigravityTears = {},
     }
   end
   return Store.PlayerData[playerHash]
+end
+
+--- @param player EntityPlayer
+function AddLudoTear(player)
+  local playerData = PlayerUtils.GetPlayerData(player)
+  local tear = player:FireTear(
+    player.Position,
+    player.Velocity,
+    false,
+    true,
+    true,
+    player,
+    1
+  )
+  tear:AddTearFlags(TearFlags.TEAR_LUDOVICO)
+  tear.Scale = 2
+  playerData.ludodivo = {
+    Tear = tear,
+    BaseDamage = tear.CollisionDamage,
+    Multiplier = 0.5,
+    ExpFrames = {},
+    Index = 1,
+  }
 end
 
 ---@param player EntityPlayer
@@ -64,63 +100,70 @@ function PlayerUtils.HandleNewRoom(player)
   playerData.tearOrbit = TearOrbit:new()
   playerData.projOrbit = ProjectileOrbit:new()
   playerData.effectOrbit = EffectOrbit:new()
+  playerData.antigravityTears = {}
 
   if (player:HasCollectible(CollectibleType.COLLECTIBLE_LUDOVICO_TECHNIQUE)) then
-    local tear = player:FireTear(
-      player.Position,
-      player.Velocity,
-      false,
-      true,
-      true
-    )
-    tear:AddTearFlags(TearFlags.TEAR_LUDOVICO | TearFlags.TEAR_OCCULT)
-    playerData.ludodivo = {
-      Tear = tear,
-      BaseDamage = tear.CollisionDamage,
-      Multiplier = 0.5,
-      ExpFrames = {},
-      Index = 0,
-    }
+    AddLudoTear(player)
   end
 end
 
----@param value number
+---@param value? boolean
 ---@param playerData PlayerData
 local function changeMinRange(value, playerData)
   playerData.orbitRange.min = value and 100 or Const.GRID_SIZE
   playerData.orbitRange.act = Utils.Clamp(playerData.orbitRange.act, playerData.orbitRange.min, playerData.orbitRange.max)
 end
 
+---@param collectibleType number
+---@param maxCharge number
+---@return fun(value: boolean, playerData: PlayerData)
+local function changeChargeBarFactory(collectibleType, maxCharge)
+  return function(value, playerData)
+    if value then
+      playerData.activeBars[collectibleType] = ChargeBar:new(maxCharge)
+    else
+      playerData.activeBars[collectibleType] = nil
+    end
+  end
+end
+
+---@param value? boolean
+---@param playerData PlayerData
+---@param player EntityPlayer
+local function changeLudoTear(value, playerData, player)
+  if value then
+    if not playerData.ludodivo then
+      AddLudoTear(player)
+    end
+  else
+    if playerData.ludodivo then
+      playerData.ludodivo.Tear:Remove()
+      playerData.ludodivo = nil
+    end
+  end
+end
+
+local collectibles = {
+  [CollectibleType.COLLECTIBLE_DR_FETUS] = changeMinRange,
+  [CollectibleType.COLLECTIBLE_EPIC_FETUS] = changeMinRange,
+  [CollectibleType.COLLECTIBLE_IPECAC] = changeMinRange,
+  [CollectibleType.COLLECTIBLE_LUDOVICO_TECHNIQUE] = changeLudoTear,
+  [CollectibleType.COLLECTIBLE_CURSED_EYE] = changeChargeBarFactory(CollectibleType.COLLECTIBLE_CURSED_EYE, 5),
+  [CollectibleType.COLLECTIBLE_NEPTUNUS] = changeChargeBarFactory(CollectibleType.COLLECTIBLE_NEPTUNUS, 3 * Const.FPS),
+}
+
 ---@param player EntityPlayer
 function PlayerUtils.CachePlayerCollectibles(player)
   local playerData = PlayerUtils.GetPlayerData(player)
-  local collectibles = {
-    [CollectibleType.COLLECTIBLE_DR_FETUS] = changeMinRange,
-    [CollectibleType.COLLECTIBLE_EPIC_FETUS] = changeMinRange,
-    [CollectibleType.COLLECTIBLE_IPECAC] = changeMinRange,
-    [CollectibleType.COLLECTIBLE_KIDNEY_STONE] = function(value)
-      if value then
-        playerData.activeBars[CollectibleType.COLLECTIBLE_KIDNEY_STONE] = ChargeBar:new(75)
-      else
-        playerData.activeBars[CollectibleType.COLLECTIBLE_KIDNEY_STONE] = nil
-      end
-    end,
-    [CollectibleType.COLLECTIBLE_CURSED_EYE] = function(value)
-      if value then
-        playerData.activeBars[CollectibleType.COLLECTIBLE_CURSED_EYE] = ChargeBar:new(5)
-      else
-        playerData.activeBars[CollectibleType.COLLECTIBLE_CURSED_EYE] = nil
-      end
-    end,
-  }
 
   for collectibleType, handler in pairs(collectibles) do
     local hasItem = player:HasCollectible(collectibleType) and true or nil
     if hasItem ~= playerData.cacheCollectibles[collectibleType] then
       playerData.cacheCollectibles[collectibleType] = hasItem
-      handler(hasItem)
+      handler(hasItem, playerData, player)
     end
   end
+  playerData.cacheCollectibles[CollectibleType.COLLECTIBLE_TRACTOR_BEAM] = player:HasCollectible(CollectibleType.COLLECTIBLE_TRACTOR_BEAM)
 end
 
 return PlayerUtils

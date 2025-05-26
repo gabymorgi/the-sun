@@ -1,12 +1,25 @@
+---@type Utils
 local Utils = include("thesun-src.utils")
+---@type Const
+local Const = include("thesun-src.Const")
+local log = include("log")
+
+local flagsToTransfer = {
+  "TEAR_SQUARE",
+  "TEAR_WIGGLE",
+  "TEAR_SPIRAL",
+  "TEAR_BIG_SPIRAL"
+}
 
 ---@class Orbital<T>: { entity: T }
 ---@field direction number
 ---@field radius number
 ---@field angle number
 ---@field expirationFrame number
+---@field flags number
 ---@field bounced? boolean
 ---@field target? Entity
+---@field boomerang? number
 
 ---@alias addOrbital<T> fun(self: any, player: EntityPlayer, orbital: T, tearLifetime: number?): Orbital<T>
 ---@class Orbit<T>: { list: Dict<Orbital<EntityOrbital>>, add: addOrbital<T> }
@@ -42,6 +55,7 @@ function Orbit:add(player, orbital, tearLifetime)
     radius = (orbital.Position - player.Position):Length(),
     angle = Utils.GetAngle(player.Position, orbital.Position),
     expirationFrame = Game():GetFrameCount() + (tearLifetime or player.TearRange / 2),
+    flags = 0,
   }
   self.length = self.length + 1
   return self.list[orbitalHash]
@@ -75,32 +89,48 @@ end
 ---@return EntityTear
 ---@diagnostic disable-next-line: duplicate-set-field
 function TearOrbit:add(player, orbital)
+  local orb = Orbit.add(self, player, orbital)
   orbital:AddTearFlags(TearFlags.TEAR_SPECTRAL)
   if (orbital.Type == EntityType.ENTITY_TEAR) then
-    orbital.Height = -10
-    orbital.FallingAcceleration = -0.1
-    orbital.FallingSpeed = 0
+    -- worm flags modifies unexpectedly the tear
+    if orbital:HasTearFlags(TearFlags.TEAR_HYDROBOUNCE) then
+      -- orbital.Height = -10
+      orbital.FallingAcceleration = 1
+    else
+      orbital.Height = -10
+      orbital.FallingAcceleration = -0.1
+      orbital.FallingSpeed = 0
+    end
+
+    for _, flag in ipairs(flagsToTransfer) do
+      if orbital:HasTearFlags(TearFlags[flag]) then
+        orb.flags = orb.flags | Const.CustomFlags[flag]
+        orbital:ClearTearFlags(TearFlags[flag])
+      end
+    end
+    if orbital:HasTearFlags(TearFlags.TEAR_BOOMERANG) then
+      orb.boomerang = - orb.direction
+    end
   end
-  return Orbit.add(self, player, orbital)
+  return orb
 end
 
 ---@param hash number
 ---@diagnostic disable-next-line: duplicate-set-field
 function TearOrbit:remove(hash)
   local tear = self.list[hash].entity
-  if tear.Type == EntityType.ENTITY_TEAR and not tear.Variant == TearVariant.FETUS then
-      -- tear.FallingSpeed = 0.5
-      if not tear:HasTearFlags(TearFlags.TEAR_OCCULT) then
-        tear.Velocity = tear.Velocity * 10
-      end
-      if tear:HasTearFlags(TearFlags.TEAR_POP) then
-        tear.FallingAcceleration = -0.09
-        tear:ClearTearFlags(TearFlags.TEAR_SPECTRAL)
-        tear.FallingSpeed = 0
-        tear.Velocity = tear.Velocity:Rotated(-90)
-      else
-        tear.FallingAcceleration = 0
-      end
+  if tear.Type == EntityType.ENTITY_TEAR and tear.Variant ~= TearVariant.FETUS then
+    if tear:HasTearFlags(TearFlags.TEAR_CONTINUUM) then
+      tear.FallingAcceleration = -0.09
+    elseif tear:HasTearFlags(TearFlags.TEAR_POP) then
+      tear.FallingAcceleration = -0.09
+      tear:ClearTearFlags(TearFlags.TEAR_SPECTRAL)
+      tear.Velocity = tear.Velocity:Rotated(-90)
+    elseif tear:HasTearFlags(TearFlags.TEAR_HYDROBOUNCE) then
+      tear.FallingAcceleration = 3
+    else
+      tear.FallingAcceleration = 0
+    end
   end
   Orbit.remove(self, hash)
 end
@@ -121,7 +151,7 @@ end
 ---@return EntityProjectile
 ---@diagnostic disable-next-line: duplicate-set-field
 function ProjectileOrbit:add(player, orbital)
-  orbital:AddProjectileFlags(ProjectileFlags.HIT_ENEMIES | ProjectileFlags.CANT_HIT_PLAYER)
+  orbital:AddProjectileFlags(ProjectileFlags.HIT_ENEMIES | ProjectileFlags.CANT_HIT_PLAYER | ProjectileFlags.GHOST)
   orbital.FallingAccel = -0.1
   orbital.FallingSpeed = 0
   return Orbit.add(self, player, orbital)
@@ -132,7 +162,6 @@ end
 function ProjectileOrbit:remove(hash)
   local ent = self.list[hash].entity
   ent.FallingAccel = 0.1
-  ent.Velocity = ent.Velocity * 10
   Orbit.remove(self, hash)
 end
 

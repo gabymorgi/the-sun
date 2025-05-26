@@ -464,7 +464,7 @@ end
 --- @param value any
 function log.Value(tag, value)
   if type(value) == "table" then
-    Isaac.DebugString("the-sun " .. tag .. ": " .. log:Table(value))
+    Isaac.DebugString("the-sun " .. tag .. ": " .. log.Table(value))
   else
     Isaac.DebugString("the-sun " .. tag .. ": " .. tostring(value))
   end

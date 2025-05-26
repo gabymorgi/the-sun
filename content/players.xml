@@ -7,10 +7,10 @@
         canShoot="false"
         pocketActive="522"
         items="403"
-        hp="18"
+        hp="6"
         keys="10"
         bombs="10"
-        card="5"
+        card="46"
     />
 
     <player name="Pluto"

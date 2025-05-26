@@ -1,5 +1,4 @@
 ---@alias EntityOrbital EntityTear | EntityProjectile | EntityEffect
----@alias Ludovico { Tear: EntityTear, BaseDamage: number, Multiplier: number, ExpFrames: number[], Index: number }
 
 ---@class Dict<T>: { [number]: T }
 
@@ -80,15 +79,15 @@ theSunMod:AddCallback(ModCallbacks.MC_EVALUATE_CACHE, theSunMod.onEvaluateCacheF
 function theSunMod:onEvaluateCacheFireDelay(player)
   if not Utils.IsTheSun(player) then return end
 
-  log.Value("onEvaluateCacheFireDelay", player.MaxFireDelay)
-
   player.MaxFireDelay = playerInRoomMultiplier[cachedPlayerCount] * roomMultiplier[cachedRoomShape] * player.MaxFireDelay
+  
+  log.Value("onEvaluateCacheFireDelay", player.MaxFireDelay)
 end
 theSunMod:AddCallback(ModCallbacks.MC_EVALUATE_CACHE, theSunMod.onEvaluateCacheFireDelay, CacheFlag.CACHE_FIREDELAY)
 
 ---@param entity Entity
 function theSunMod:OnEntityDeath(entity)
-  if entity.Type == EntityType.ENTITY_FAMILIAR and entity.Variant == FamiliarVariant.BLUE_SPIDER then
+  if entity.SpawnerEntity and entity.Type == EntityType.ENTITY_FAMILIAR and entity.Variant == FamiliarVariant.BLUE_SPIDER then
     local player = entity.SpawnerEntity:ToPlayer()
     if not player or not Utils.IsTheSun(player) then return end
     local playerData = PlayerUtils.GetPlayerData(player)
@@ -151,11 +150,18 @@ function theSunMod:OnTearCollision(tear, collider)
   --   variant = log.Enum("tear", tear.Variant),
   --   collision = tear.CollisionDamage,
   -- })
+  --tear.CollisionDamage = 2
+  
   local player = tear.SpawnerEntity:ToPlayer()
   if not player or not Utils.IsTheSun(player) then
     return
   end
   local playerData = PlayerUtils.GetPlayerData(player)
+  if tear:HasTearFlags(TearFlags.TEAR_LUDOVICO) then
+    log.Value("ludodivo collision", tostring(playerData.ludodivo.BaseDamage) .. " * " .. tostring(playerData.ludodivo.Multiplier))
+    tear.CollisionDamage = playerData.ludodivo.BaseDamage * playerData.ludodivo.Multiplier
+    return
+  end
   local tearHash = GetPtrHash(tear)
   if not playerData.tearOrbit.list[tearHash] then
     return
@@ -182,14 +188,27 @@ theSunMod:AddCallback(ModCallbacks.MC_PRE_TEAR_COLLISION, theSunMod.OnTearCollis
 
 function theSunMod:OnUpdate()
   local players = Utils.GetPlayers()
+  log.Value("OnUpdate", ".")
 
   if #players > 0 then
+    local frameCount = Const.game:GetFrameCount()
     local room = Const.game:GetRoom()
     -- if not room:IsClear() then -- TOMOD
     if true then
       for _, player in pairs(players) do
         local playerData = PlayerUtils.GetPlayerData(player)
+        if (Const.game:GetFrameCount() % 32 == 0) then
+          -- log.Value("player", {
+          --   player = GetPtrHash(player),
+          --   playerData = playerData,
+          -- })
+        end
         if player.FireDelay <= 0 then
+          if player:HasCollectible(CollectibleType.COLLECTIBLE_KIDNEY_STONE) then
+            if playerData.kidneyStoneFrame < frameCount then
+              goto skipShot
+            end
+          end
           local clusterShot = false
           if player:HasCollectible(CollectibleType.COLLECTIBLE_MONSTROS_LUNG) then
             clusterShot = true
@@ -205,8 +224,29 @@ function theSunMod:OnUpdate()
           else
             WallFire.WallShot(player)
           end
-          player.FireDelay = player.MaxFireDelay
+          player.FireDelay = 120 -- player.MaxFireDelay
         end
+        if playerData.activeBars[CollectibleType.COLLECTIBLE_NEPTUNUS] then
+          local bar = playerData.activeBars[CollectibleType.COLLECTIBLE_NEPTUNUS]
+          if playerData.tearOrbit.length > 0 then
+            if bar.charge > 0 then
+              local min = math.min(bar.charge, player.FireDelay)
+              bar:add(-min)
+              player.FireDelay = player.FireDelay - min
+            end
+          else
+            bar:add(1)
+          end
+        end
+        if player:HasCollectible(CollectibleType.COLLECTIBLE_TECH_5) then
+          if frameCount % 4 == 0 and Const.rng:RandomFloat() < 0.18 then
+            local laser = player:FireTechXLaser(player.Position, player.Velocity, playerData.orbitRange.act, player)
+            laser:SetTimeout(5)
+            laser.OneHit = true
+          end
+        end
+
+        ::skipShot::
 
         OrbitingTears.TryAbsorbTears(player)
       end
@@ -215,7 +255,7 @@ function theSunMod:OnUpdate()
       OrbitingTears.UpdateOrbitingRadius(player)
       OrbitingTears.UpdateOrbitingEntities(player)
       OrbitingTears.UpdateOrbitingTears(player)
-      if Const.game:GetFrameCount() % 32 == 0 then -- once every seconds
+      if frameCount % 32 == 0 then -- once every second
         PlayerUtils.CachePlayerCollectibles(player)
       end
     end
@@ -233,7 +273,7 @@ end
 theSunMod:AddCallback(ModCallbacks.MC_USE_PILL, theSunMod.OnUsePill)
 
 --- @param tear EntityTear
-function theSunMod:HandleTearUpdate(tear)
+function theSunMod:HandleBlueTearUpdate(tear)
   --- Accessing the initialized entity on MC_POST_TEAR_INIT does provide incomplete data in some use cases
   if tear.FrameCount == 1 then
     local player = tear.SpawnerEntity:ToPlayer()
@@ -251,29 +291,48 @@ function theSunMod:HandleTearUpdate(tear)
     end
   end
 end
-theSunMod:AddCallback(ModCallbacks.MC_POST_TEAR_UPDATE, theSunMod.HandleTearUpdate, TearVariant.BLUE)
+theSunMod:AddCallback(ModCallbacks.MC_POST_TEAR_UPDATE, theSunMod.HandleBlueTearUpdate, TearVariant.BLUE)
+
+--- @param tear EntityTear
+function theSunMod:HandleStoneTearUpdate(tear)
+  --- Accessing the initialized entity on MC_POST_TEAR_INIT does provide incomplete data in some use cases
+  if tear.FrameCount == 1 then
+    -- log.Value("tear updated", {
+    --   Variant = log.Enum("tear", tear.Variant),
+    --   Flags = log.Flag("tear", tear.TearFlags),
+    -- })
+    local player = tear.SpawnerEntity:ToPlayer()
+    if not player or not Utils.IsTheSun(player) then return end
+    local playerData = PlayerUtils.GetPlayerData(player)
+    local tearHash = GetPtrHash(tear)
+    if playerData.tearOrbit.list[tearHash] then
+      return
+    end
+    local orb = playerData.tearOrbit:add(player, tear)
+    orb.direction = 2
+    playerData.kidneyStoneFrame = Const.game:GetFrameCount() + 25 * 30 -- 30 segundos
+  end
+end
+theSunMod:AddCallback(ModCallbacks.MC_POST_TEAR_UPDATE, theSunMod.HandleStoneTearUpdate, TearVariant.STONE)
+
+--- @param tear EntityLaser
+function theSunMod:HandleLaserUpdate(tear)
+  log.Value("laser updated 0", tear.FrameCount)
+  --- Accessing the initialized entity on MC_POST_TEAR_INIT does provide incomplete data in some use cases
+  if tear.FrameCount == 1 then
+    log.Value("laser updated", {
+      Variant = log.Enum("tear", tear.Variant),
+      Flags = log.Flag("tear", tear.TearFlags),
+    })
+  end
+end
+theSunMod:AddCallback(ModCallbacks.MC_POST_LASER_UPDATE, theSunMod.HandleLaserUpdate)
 
 --- @param effect EntityEffect
 function theSunMod:HandleEffectInit(effect)
   -- log.Value("HandleEffectInit", {
-  --   variant = log.Enum("effect", effect.Variant),
-  --   damage = effect.DamageSource,
-  --   SpawnerEntity = effect.SpawnerEntity,
-  --   CollisionDamage = effect.CollisionDamage,
-  --   Timeout = effect.Timeout,
-  --   LifeSpan = effect.LifeSpan,
-  --   FallingAcceleration = effect.FallingAcceleration,
-  --   FallingSpeed = effect.FallingSpeed,
+  --   variant = log.Enum("effect", effect.Variant)
   -- })
-  
-  -- local player = effect.SpawnerEntity:ToPlayer()
-  -- if not player then
-  --   return
-  -- end
-  -- if not Utils.IsTheSun(player) then
-  --   return
-  -- end
-  -- effectToCheck[GetPtrHash(effect)] = effect
   if (#Utils.GetPlayers() < 1) then return end
   local closestPlayer = nil
   local closestDistance = math.huge
@@ -290,7 +349,6 @@ function theSunMod:HandleEffectInit(effect)
   if closestPlayer and Utils.IsTheSun(closestPlayer) then
     PlayerUtils.GetPlayerData(closestPlayer).effectOrbit:add(closestPlayer, effect)
   end
-  
 end
 theSunMod:AddCallback(ModCallbacks.MC_POST_EFFECT_INIT, theSunMod.HandleEffectInit, EffectVariant.EVIL_EYE)
 
@@ -353,20 +411,32 @@ theSunMod:AddCallback(ModCallbacks.MC_POST_KNIFE_INIT, theSunMod.HandleKnifeInit
 
 --- @param tear EntityTear
 function theSunMod:HandleFireTear(tear, player)
-  -- log.Value("tear", {
+  -- log.Value("tear fired", {
   --   Variant = log.Enum("tear", tear.Variant),
   --   Flags = log.Flag("tear", tear.TearFlags),
-  --   collision = tear.CollisionDamage,
-  --   base = tear.BaseDamage,
+  --   frameCount = tear.FrameCount,
   -- })
+  
 end
 theSunMod:AddCallback(ModCallbacks.MC_POST_FIRE_TEAR, theSunMod.HandleFireTear)
+
+--- @param tear EntityLaser
+function theSunMod:HandleFireTechLaser(tear, player)
+  log.Value("laser", {
+    Variant = log.Enum("tear", tear.Variant),
+    Flags = log.Flag("tear", tear.TearFlags),
+    timeout = tear.Timeout,
+  })
+end
+
+theSunMod:AddCallback(ModCallbacks.MC_POST_FIRE_TECH_X_LASER, theSunMod.HandleFireTechLaser)
 
 
 local RADIUS = 30 -- píxeles aprox. (ajústalo a gusto)
 theSunMod:AddCallback(ModCallbacks.MC_POST_PLAYER_RENDER, function(_, player)
   -- Si el HUD está oculto no queremos renderizar nada
   if not Game():GetHUD():IsVisible() then return end
+  if Game():IsPaused() then return end
 
   local activeBars = PlayerUtils.GetPlayerData(player).activeBars
   local keys = {}          -- para mantener un orden estable
@@ -381,7 +451,8 @@ theSunMod:AddCallback(ModCallbacks.MC_POST_PLAYER_RENDER, function(_, player)
     local scrPos = Isaac.WorldToScreen(player.Position + offset)
 
     local bar = activeBars[id]
-    local charging = not bar:isFull()             -- lógica de ejemplo
+    local charging = bar.charge > 0           -- lógica de ejemplo
+    
     bar:render(scrPos, charging)
   end
 end)
@@ -399,20 +470,38 @@ function theSunMod:OnTakeDamage(entity, amount, flags, source, countdownFrames)
   log.Value("dmg", {
     getHearts = player:GetHearts(),
     amount = amount,
-    flags = log.Flag("damage", flags),
+    flags = flags,
+    isDead = player:IsDead(),
   })
 
   -- Verifica que no esté muerto ni en animaciones raras
-  if player:IsDead() or player:IsCoopGhost() then return end
+  if amount < 1 then return end
   local activeBars = PlayerUtils.GetPlayerData(player).activeBars
   if (activeBars[CollectibleType.COLLECTIBLE_CURSED_EYE] and not player:HasCollectible(CollectibleType.COLLECTIBLE_BLACK_CANDLE)) then
     local bar = activeBars[CollectibleType.COLLECTIBLE_CURSED_EYE]
-    if bar:get() > 0 and not bar:isFull() then
+    if bar.charge > 0 and not bar:isFull() then
       Const.game:MoveToRandomRoom(false, Const.rng:RandomInt(100) + 1, player)
     end
   end
 end
 theSunMod:AddCallback(ModCallbacks.MC_ENTITY_TAKE_DMG, theSunMod.OnTakeDamage, EntityType.ENTITY_PLAYER)
+
+---@param projectile EntityProjectile
+local function ForceColorEveryFrame(_, projectile)
+  -- if projectile.SpawnerEntity and projectile.SpawnerEntity:ToPlayer() then
+    -- Solo si es tu proyectil especial, por ejemplo usando Projectile.CollisionDamage o algún CustomFlag
+    -- O si querés forzar todos
+  local color = Color(1, 1, 1, 1, 0, 0, 0, 0, 0, 0)
+    --color:SetColorize(2, 0.5, 2, 1)   -- rosado
+  --color:SetColorize(1.5, 0.3, 1.5, 1)   -- rosado
+  --color:SetColorize(3, 0.7, 1, 1) -- rosado
+  
+    projectile:SetColor(color, 1, 1, false, false)
+    -- projectile:SetColor(Color(1, 1, 1, 1), 1, 1, false, false)
+  -- end
+end
+
+theSunMod:AddCallback(ModCallbacks.MC_POST_PROJECTILE_UPDATE, ForceColorEveryFrame)
 --------------------------------------------------------------------------------------------------
 
 local PLUTO_TYPE = Isaac.GetPlayerTypeByName("Pluto", true)
