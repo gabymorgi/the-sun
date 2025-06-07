@@ -96,7 +96,7 @@ function theSunMod:OnEntityDeath(entity)
 end
 theSunMod:AddCallback(ModCallbacks.MC_POST_ENTITY_REMOVE, theSunMod.OnEntityDeath)
 
-local function HandleRoomEnter()
+function theSunMod:OnRoomEnter()
   local players = Utils.GetPlayers()
   if #players == 0 then return end
 
@@ -115,7 +115,7 @@ local function HandleRoomEnter()
     end
   end
 end
-theSunMod:AddCallback(ModCallbacks.MC_POST_NEW_ROOM, HandleRoomEnter)
+theSunMod:AddCallback(ModCallbacks.MC_POST_NEW_ROOM, theSunMod.OnRoomEnter)
 
 ---@param bomb EntityBomb
 ---@param collider Entity
@@ -186,79 +186,74 @@ function theSunMod:OnTearCollision(tear, collider)
 end
 theSunMod:AddCallback(ModCallbacks.MC_PRE_TEAR_COLLISION, theSunMod.OnTearCollision)
 
-function theSunMod:OnUpdate()
-  local players = Utils.GetPlayers()
-  log.Value("OnUpdate", ".")
+---@param player EntityPlayer
+function theSunMod:OnUpdate(player)
+  -- local itemConfigPluto = Isaac.GetItemConfig():GetCollectible(CollectibleType.COLLECTIBLE_PLUTO)
+  -- player:RemoveCostume(itemConfigPluto)
 
-  if #players > 0 then
-    local frameCount = Const.game:GetFrameCount()
-    local room = Const.game:GetRoom()
-    -- if not room:IsClear() then -- TOMOD
-    if true then
-      for _, player in pairs(players) do
-        local playerData = PlayerUtils.GetPlayerData(player)
-        if (Const.game:GetFrameCount() % 32 == 0) then
-          -- log.Value("player", {
-          --   player = GetPtrHash(player),
-          --   playerData = playerData,
-          -- })
-        end
-        if player.FireDelay <= 0 then
-          if player:HasCollectible(CollectibleType.COLLECTIBLE_KIDNEY_STONE) then
-            if playerData.kidneyStoneFrame < frameCount then
-              goto skipShot
-            end
-          end
-          local clusterShot = false
-          if player:HasCollectible(CollectibleType.COLLECTIBLE_MONSTROS_LUNG) then
-            clusterShot = true
-          elseif player:HasCollectible(CollectibleType.COLLECTIBLE_LEAD_PENCIL) then
-            playerData.leadPencilCount = playerData.leadPencilCount + 1
-            if playerData.leadPencilCount > 15 then
-              playerData.leadPencilCount = 0
-              clusterShot = true
-            end
-          end
-          if clusterShot then
-            WallFire.ClusterWallShot(player)
-          else
-            WallFire.WallShot(player)
-          end
-          player.FireDelay = 120 -- player.MaxFireDelay
-        end
-        if playerData.activeBars[CollectibleType.COLLECTIBLE_NEPTUNUS] then
-          local bar = playerData.activeBars[CollectibleType.COLLECTIBLE_NEPTUNUS]
-          if playerData.tearOrbit.length > 0 then
-            if bar.charge > 0 then
-              local min = math.min(bar.charge, player.FireDelay)
-              bar:add(-min)
-              player.FireDelay = player.FireDelay - min
-            end
-          else
-            bar:add(1)
-          end
-        end
-        if player:HasCollectible(CollectibleType.COLLECTIBLE_TECH_5) then
-          if frameCount % 4 == 0 and Const.rng:RandomFloat() < 0.18 then
-            local laser = player:FireTechXLaser(player.Position, player.Velocity, playerData.orbitRange.act, player)
-            laser:SetTimeout(5)
-            laser.OneHit = true
-          end
-        end
+  if not Utils.IsTheSun(player) then return end
 
-        ::skipShot::
-
-        OrbitingTears.TryAbsorbTears(player)
+  local frameCount = Const.game:GetFrameCount()
+  local room = Const.game:GetRoom()
+  -- if not room:IsClear() then -- TOMOD
+  if true then
+    local playerData = PlayerUtils.GetPlayerData(player)
+    if player.FireDelay <= 0 then
+      if player:HasCollectible(CollectibleType.COLLECTIBLE_KIDNEY_STONE) then
+        if playerData.kidneyStoneFrame < frameCount then
+          goto skipShot
+        end
+      end
+      local clusterShot = false
+      if player:HasCollectible(CollectibleType.COLLECTIBLE_MONSTROS_LUNG) then
+        clusterShot = true
+      elseif player:HasCollectible(CollectibleType.COLLECTIBLE_LEAD_PENCIL) then
+        playerData.leadPencilCount = playerData.leadPencilCount + 1
+        if playerData.leadPencilCount > 15 then
+          playerData.leadPencilCount = 0
+          clusterShot = true
+        end
+      end
+      if clusterShot then
+        WallFire.ClusterWallShot(player)
+      else
+        WallFire.WallShot(player)
+      end
+      player.FireDelay = 120 -- player.MaxFireDelay
+    end
+    if player:HasCollectible(CollectibleType.COLLECTIBLE_TECH_5) then
+      if frameCount % 4 == 0 and Const.rng:RandomFloat() < 0.18 then
+        local laser = player:FireTechXLaser(player.Position, player.Velocity, playerData.orbitRange.act, player)
+        --- setTimeout actually accepts a number
+        ---@diagnostic disable-next-line: param-type-mismatch
+        laser:SetTimeout(5)
+        laser.OneHit = true
       end
     end
-    for _, player in pairs(players) do
-      OrbitingTears.UpdateOrbitingRadius(player)
-      OrbitingTears.UpdateOrbitingEntities(player)
-      OrbitingTears.UpdateOrbitingTears(player)
-      if frameCount % 32 == 0 then -- once every second
-        PlayerUtils.CachePlayerCollectibles(player)
+
+    ::skipShot::
+
+    if playerData.activeBars[CollectibleType.COLLECTIBLE_NEPTUNUS] then
+      local bar = playerData.activeBars[CollectibleType.COLLECTIBLE_NEPTUNUS]
+      if playerData.tearOrbit.length > 0 then
+        if bar.charge > 0 then
+          local min = math.min(bar.charge, player.FireDelay)
+          bar:add(-min)
+          player.FireDelay = player.FireDelay - min
+        end
+      else
+        bar:add(1)
       end
     end
+
+    OrbitingTears.TryAbsorbTears(player)
+  end
+
+  OrbitingTears.UpdateOrbitingRadius(player)
+  OrbitingTears.UpdateOrbitingEntities(player)
+  OrbitingTears.UpdateOrbitingTears(player)
+  if frameCount % 32 == 0 then -- once every second
+    PlayerUtils.CachePlayerCollectibles(player)
   end
 end
 theSunMod:AddCallback(ModCallbacks.MC_POST_PEFFECT_UPDATE, theSunMod.OnUpdate)
@@ -274,6 +269,7 @@ theSunMod:AddCallback(ModCallbacks.MC_USE_PILL, theSunMod.OnUsePill)
 
 --- @param tear EntityTear
 function theSunMod:HandleBlueTearUpdate(tear)
+  if Store.prismCachedCount < 1 then return end
   --- Accessing the initialized entity on MC_POST_TEAR_INIT does provide incomplete data in some use cases
   if tear.FrameCount == 1 then
     local player = tear.SpawnerEntity:ToPlayer()
@@ -410,7 +406,7 @@ theSunMod:AddCallback(ModCallbacks.MC_POST_KNIFE_INIT, theSunMod.HandleKnifeInit
 
 
 --- @param tear EntityTear
-function theSunMod:HandleFireTear(tear, player)
+function theSunMod:HandleFireTear(tear)
   -- log.Value("tear fired", {
   --   Variant = log.Enum("tear", tear.Variant),
   --   Flags = log.Flag("tear", tear.TearFlags),
@@ -434,7 +430,6 @@ theSunMod:AddCallback(ModCallbacks.MC_POST_FIRE_TECH_X_LASER, theSunMod.HandleFi
 
 local RADIUS = 30 -- píxeles aprox. (ajústalo a gusto)
 theSunMod:AddCallback(ModCallbacks.MC_POST_PLAYER_RENDER, function(_, player)
-  -- Si el HUD está oculto no queremos renderizar nada
   if not Game():GetHUD():IsVisible() then return end
   if Game():IsPaused() then return end
 
@@ -466,16 +461,9 @@ function theSunMod:OnTakeDamage(entity, amount, flags, source, countdownFrames)
   local player = entity:ToPlayer()
   if not player or not Utils.IsTheSun(player) then return end
 
-  -- Verifica que no sea invulnerabilidad, fuego, spikes, etc. (opcional)
-  log.Value("dmg", {
-    getHearts = player:GetHearts(),
-    amount = amount,
-    flags = flags,
-    isDead = player:IsDead(),
-  })
-
   -- Verifica que no esté muerto ni en animaciones raras
-  if amount < 1 then return end
+  local health = player:GetHearts() + player:GetSoulHearts() + player:GetBoneHearts()
+  if health < 2 then return end
   local activeBars = PlayerUtils.GetPlayerData(player).activeBars
   if (activeBars[CollectibleType.COLLECTIBLE_CURSED_EYE] and not player:HasCollectible(CollectibleType.COLLECTIBLE_BLACK_CANDLE)) then
     local bar = activeBars[CollectibleType.COLLECTIBLE_CURSED_EYE]
@@ -486,49 +474,33 @@ function theSunMod:OnTakeDamage(entity, amount, flags, source, countdownFrames)
 end
 theSunMod:AddCallback(ModCallbacks.MC_ENTITY_TAKE_DMG, theSunMod.OnTakeDamage, EntityType.ENTITY_PLAYER)
 
----@param projectile EntityProjectile
-local function ForceColorEveryFrame(_, projectile)
-  -- if projectile.SpawnerEntity and projectile.SpawnerEntity:ToPlayer() then
-    -- Solo si es tu proyectil especial, por ejemplo usando Projectile.CollisionDamage o algún CustomFlag
-    -- O si querés forzar todos
-  local color = Color(1, 1, 1, 1, 0, 0, 0, 0, 0, 0)
-    --color:SetColorize(2, 0.5, 2, 1)   -- rosado
-  --color:SetColorize(1.5, 0.3, 1.5, 1)   -- rosado
-  --color:SetColorize(3, 0.7, 1, 1) -- rosado
-  
-    projectile:SetColor(color, 1, 1, false, false)
-    -- projectile:SetColor(Color(1, 1, 1, 1), 1, 1, false, false)
-  -- end
+local color = Color(1, 1, 1, 1, 0, 0, 0, 0, 0, 0)
+local function ForceColorEveryFrame()
+  for _, playerData in pairs(Store.PlayerData) do
+    for _, proj in pairs(playerData.projOrbit.list) do
+      proj.entity:SetColor(color, 1, 1, false, false)
+    end
+  end
+  for hash, proj in pairs(Store.WallProjectiles) do
+    if not proj:HasProjectileFlags(ProjectileFlags.CANT_HIT_PLAYER) then
+      proj:SetColor(color, 1, 1, false, false)
+    end
+  end
 end
-
-theSunMod:AddCallback(ModCallbacks.MC_POST_PROJECTILE_UPDATE, ForceColorEveryFrame)
+theSunMod:AddCallback(ModCallbacks.MC_POST_UPDATE, ForceColorEveryFrame)
 --------------------------------------------------------------------------------------------------
 
 local PLUTO_TYPE = Isaac.GetPlayerTypeByName("Pluto", true)
-local HOLY_OUTBURST_ID = Isaac.GetItemIdByName("Holy Outburst")
 
 ---@param player EntityPlayer
 function theSunMod:PlutoInit(player)
   if player:GetPlayerType() ~= PLUTO_TYPE then
     return
   end
-
-  player:SetPocketActiveItem(HOLY_OUTBURST_ID, ActiveSlot.SLOT_POCKET, true)
-
+  player:AddCollectible(CollectibleType.COLLECTIBLE_PLUTO)
+  local itemConfigPluto = Isaac.GetItemConfig():GetCollectible(CollectibleType.COLLECTIBLE_PLUTO)
+  player:RemoveCostume(itemConfigPluto)
   local pool = Const.game:GetItemPool()
-  pool:RemoveCollectible(HOLY_OUTBURST_ID)
+  pool:RemoveCollectible(CollectibleType.COLLECTIBLE_PLUTO)
 end
-
 theSunMod:AddCallback(ModCallbacks.MC_POST_PLAYER_INIT, theSunMod.PlutoInit)
-
-function theSunMod:HolyOutburstUse(_, _, player)
-  local spawnPos = player.Position
-
-  local creep = Utils.SpawnEntity(EntityType.ENTITY_EFFECT, EffectVariant.PLAYER_CREEP_WHITE, spawnPos, Vector.Zero, player):ToEffect()
-  creep.Scale = 2
-  creep:Update()
-
-  return true
-end
-
-theSunMod:AddCallback(ModCallbacks.MC_USE_ITEM, theSunMod.HolyOutburstUse, HOLY_OUTBURST_ID)

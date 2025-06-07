@@ -1,0 +1,3 @@
+<entities anm2root="gfx/effects/" version="5">
+  <entity anm2path="effect_absorb.anm2" id="1000" variant="2096" name="Absorb orbit" />
+</entities>

@@ -1,5 +1,5 @@
 {	"runtime.version": "Lua 5.3",	"workspace.library": [
-		"c:\\Users\\gabym\\.vscode\\extensions\\filloax.isaac-lua-api-vscode-1.12.0\\out\\emmylua\\repentogon"
+		"c:\\Users\\gabym\\.vscode\\extensions\\filloax.isaac-lua-api-vscode-1.12.1\\out\\emmylua\\repentogon"
 	],	"diagnostics.globals": [
 		"ActionTriggers",
 		"ActiveSlot",

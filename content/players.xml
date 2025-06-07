@@ -17,14 +17,13 @@
         skin="character_pluto.png"
         nameimage="playername_pluto.png"
         portrait="playerportrait_pluto.png"
-        items="598"
+        canShoot="false"
         card="20"
-        hp="8"
-        armor="8"
+        hp="2"
+        armor="2"
+        black="2"
         keys="1"
         skinColor="-1"
         bSkinParent="TheSun"
-        costumeSuffix="pluto"
-        costume="104"
     />
 </players>

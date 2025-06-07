@@ -53,14 +53,11 @@ function ChargeBar:render(screenPos)
 
     if p > 0 then
       if p < 99 then
-        --log.Value("Charging", p)
         self.sprite:SetFrame("Charging", math.floor(p))
       elseif not self.sprite:IsPlaying("Charged") then
-        --log.Value("Charged", p)
         self.sprite:Play("Charged", true)
       end
     elseif not self.sprite:IsPlaying("Disappear") then
-      --log.Value("Disappear", p)
       self.sprite:Play("Disappear", true)
     end
   end

@@ -161,6 +161,7 @@ end
 ---@diagnostic disable-next-line: duplicate-set-field
 function ProjectileOrbit:remove(hash)
   local ent = self.list[hash].entity
+  ent:ClearProjectileFlags(ProjectileFlags.GHOST)
   ent.FallingAccel = 0.1
   Orbit.remove(self, hash)
 end

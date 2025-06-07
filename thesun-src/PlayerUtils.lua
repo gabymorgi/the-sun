@@ -42,6 +42,8 @@ local EffectOrbit = Orbit.EffectOrbit
 ---@field HandleNewRoom fun(player: EntityPlayer)
 ---@field CachePlayerCollectibles fun(player: EntityPlayer)
 
+local ABSORB_ORBIT_VARIANT = Isaac.GetEntityVariantByName("Absorb orbit")
+
 local PlayerUtils = {}
 
 ---@param player EntityPlayer
@@ -96,6 +98,20 @@ end
 
 ---@param player EntityPlayer
 function PlayerUtils.HandleNewRoom(player)
+  
+  local absorbEffect = Utils.SpawnEntity(
+    EntityType.ENTITY_EFFECT,
+    ABSORB_ORBIT_VARIANT,
+    player.Position,
+    Vector.Zero,
+    player
+  ):ToEffect()
+  if absorbEffect then
+    absorbEffect.SpriteOffset = Vector(0, -10)
+    absorbEffect.Position = player.Position
+    absorbEffect:FollowParent(player)
+  end
+
   local playerData = PlayerUtils.GetPlayerData(player)
   playerData.tearOrbit = TearOrbit:new()
   playerData.projOrbit = ProjectileOrbit:new()
@@ -143,11 +159,21 @@ local function changeLudoTear(value, playerData, player)
   end
 end
 
+---@param value? boolean
+local function changePrismCachedCount(value)
+  if value then
+    Store.prismCachedCount = Store.prismCachedCount + 1
+  else
+    Store.prismCachedCount = Store.prismCachedCount - 1
+  end
+end
+
 local collectibles = {
   [CollectibleType.COLLECTIBLE_DR_FETUS] = changeMinRange,
   [CollectibleType.COLLECTIBLE_EPIC_FETUS] = changeMinRange,
   [CollectibleType.COLLECTIBLE_IPECAC] = changeMinRange,
   [CollectibleType.COLLECTIBLE_LUDOVICO_TECHNIQUE] = changeLudoTear,
+  [CollectibleType.COLLECTIBLE_ANGELIC_PRISM] = changePrismCachedCount,
   [CollectibleType.COLLECTIBLE_CURSED_EYE] = changeChargeBarFactory(CollectibleType.COLLECTIBLE_CURSED_EYE, 5),
   [CollectibleType.COLLECTIBLE_NEPTUNUS] = changeChargeBarFactory(CollectibleType.COLLECTIBLE_NEPTUNUS, 3 * Const.FPS),
 }

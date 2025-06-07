@@ -153,7 +153,7 @@ end
 --- @param checkWorm boolean?
 function OrbitingTears.SpinOrbitingTears(player, entityOrbit, checkWorm)
   local playerData = PlayerUtils.GetPlayerData(player)
-  for hash, orb in pairs(entityOrbit.list) do
+  for _, orb in pairs(entityOrbit.list) do
     local vel = player.ShotSpeed * Utils.FastInvSqrt(orb.radius)
     orb.angle = orb.angle + orb.direction * vel
     local angle, radius = checkWorm and WormEffects.GetModifiedOrbit(orb) or orb.angle, orb.radius
@@ -333,7 +333,7 @@ function OrbitingTears.TryAbsorbTears(player)
   local nearby = Isaac.FindInRadius(player.Position, 60, EntityPartition.BULLET)
   for _, ent in ipairs(nearby) do
     local proj = ent:ToProjectile()
-    if proj and OrbitingTears.IsProjectileBehindPlayer(player.Position, proj) then
+    if proj and (not proj:GetData().theSunIsAbsorbed) and OrbitingTears.IsProjectileBehindPlayer(player.Position, proj) then
       local playerData = PlayerUtils.GetPlayerData(player)
       local projHash = GetPtrHash(proj)
       if player:HasCollectible(CollectibleType.COLLECTIBLE_BIRTHRIGHT) or Store.WallProjectiles[projHash] then
@@ -388,22 +388,27 @@ function OrbitingTears.TryAbsorbTears(player)
           end
         end
         proj:Remove()
+        proj:GetData().theSunIsAbsorbed = true
         if player:HasCollectible(CollectibleType.COLLECTIBLE_TECHNOLOGY_2) then
           local extra = math.max(1, math.ceil(player.MaxFireDelay))
           if (playerData.technologyTwoLaser and playerData.technologyTwoLaser:Exists()) then
+            --- setTimeout actually accepts a number
+            ---@diagnostic disable-next-line: param-type-mismatch
             playerData.technologyTwoLaser:SetTimeout(playerData.technologyTwoLaser.Timeout + extra)
           else
             local laser = player:FireTechXLaser(proj.Position, Vector.Zero, 100, player, 0.1)
+            --- setTimeout actually accepts a number
+            ---@diagnostic disable-next-line: param-type-mismatch
             laser:SetTimeout(extra)
             playerData.technologyTwoLaser = laser
           end
         end
-        -- tear.TearFlags = tear.TearFlags | TearFlags.TEAR_ORBIT
         if tear then
           local orb = PlayerUtils.GetPlayerData(player).tearOrbit:add(player, tear --[[@as EntityTear]])
           OrbitingTears.CalculatePostTearSynergies(player, orb)
         end
       elseif not playerData.projOrbit.list[projHash] then
+        proj:GetData().theSunIsAbsorbed = true
         if not proj:HasProjectileFlags(ProjectileFlags.HIT_ENEMIES) and playerData.projOrbit:hasSpace() then
           playerData.projOrbit:add(player, proj)
         end
