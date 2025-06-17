@@ -599,15 +599,6 @@ function WormEffects.GetModifiedOrbit(orb)
       orb.boomerang = -orb.boomerang
     end
   end
-  if (orb.entity:HasTearFlags(TearFlags.TEAR_HYDROBOUNCE)) then
-    --log.Value("Hydro Bounce", orb.entity.FallingAcceleration)
-    -- if (orb.entity.Height < -20) then
-    --   orb.entity.Height = -20
-    -- else
-    --   orb.entity.Height = -10
-    -- end
-    --orb.entity.Height = wiggleWormSteps[orb.entity.FrameCount % 15] - 23
-  end
   if (orb.flags & Const.CustomFlags.TEAR_SQUARE ~= 0) then
     radius = radius + hookWormSteps[orb.entity.FrameCount % 16]
   end

@@ -11,6 +11,7 @@ local Store = require("thesun-src.Store")
 WormEffects = include("thesun-src.WormEffects")
 
 ---@class OrbitingTears
+---@field VengefulRelease fun(player: EntityPlayer)
 ---@field ReleaseHomingTears fun(player: EntityPlayer)
 ---@field ExpandHomingTears fun(player: EntityPlayer, releaseOrbit: boolean?)
 ---@field ExpandOrbitingTears fun(player: EntityPlayer, entityOrbit: Orbit<EntityOrbital>)
@@ -34,6 +35,56 @@ function AddLudoMult(ludodivo, mult)
   ludodivo.Multiplier = ludodivo.Multiplier + step
   ludodivo.Tear.Scale = ludodivo.Tear.Scale + step
   ludodivo.Tear.CollisionDamage = ludodivo.BaseDamage * ludodivo.Multiplier
+end
+
+--- @param player EntityPlayer
+function OrbitingTears.VengefulRelease(player)
+  local playerData = PlayerUtils.GetPlayerData(player)
+  if playerData.tearOrbit.length + playerData.projOrbit.length + playerData.effectOrbit.length < 1 then
+    return
+  end
+  local hasTheWiz = player:HasCollectible(CollectibleType.COLLECTIBLE_THE_WIZ) or playerData.wizardRemainingFrames > 0
+  local shootVector = Utils.GetShootVector(player)
+  if hasTheWiz then
+    shootVector = shootVector:Rotated(Const.rng:RandomInt(2) * 90 - 45)
+  end
+  ---@type Entity?
+  local nearestEnemy
+  nearestEnemy = Utils.GetClosestEnemiesInCone(
+    player.Position,
+    shootVector,
+    player.TearRange,
+    -45,
+    45
+  )
+  local targetPos = nearestEnemy and nearestEnemy.Position or player.Position + shootVector * player.TearRange
+  local hasTractorBeam = player:HasCollectible(CollectibleType.COLLECTIBLE_TRACTOR_BEAM)
+  for hash, orb in pairs(playerData.tearOrbit.list) do
+    playerData.tearOrbit:remove(hash)
+    orb.entity:AddTearFlags(TearFlags.TEAR_HOMING)
+    orb.entity.Velocity = (targetPos - orb.entity.Position):Normalized() * player.ShotSpeed * 15
+    orb.entity.FallingAcceleration = -0.085
+    if hasTractorBeam then
+      local lineDir = (targetPos - player.Position):Normalized()
+      local toTear = orb.entity.Position - player.Position
+      local projectionLength = toTear:Dot(lineDir)
+      orb.entity.Position = player.Position + lineDir * projectionLength
+    end
+  end
+  for hash, orb in pairs(playerData.projOrbit.list) do
+    playerData.projOrbit:remove(hash)
+    orb.entity.Velocity = (targetPos - orb.entity.Position):Normalized() * player.ShotSpeed * 15
+  end
+  for hash, orb in pairs(playerData.effectOrbit.list) do
+    playerData.effectOrbit:remove(hash)
+    if orb.entity.Variant == EffectVariant.TECH_DOT then
+      local direction = (targetPos - orb.entity.Position):Normalized()
+      player:FireTechLaser(orb.entity.Position, LaserOffset.LASER_TECH1_OFFSET, direction, false, true,
+      player, 1)
+      orb.entity:Remove()
+    end
+    orb.entity.Velocity = (targetPos - orb.entity.Position):Normalized() * player.ShotSpeed * 15
+  end
 end
 
 --- @param player EntityPlayer
@@ -114,6 +165,8 @@ end
 --- @param player EntityPlayer
 --- @param entityOrbit Orbit<EntityOrbital>
 function OrbitingTears.ExpandOrbitingTears(player, entityOrbit)
+  if not Utils.IsTheSun(player) then return end
+
   local playerData = PlayerUtils.GetPlayerData(player)
   local step = player.ShotSpeed * Const.RADIUS_STEP_MULTIPLIER
   local target = playerData.orbitRange.act
@@ -273,9 +326,10 @@ function OrbitingTears.CalculatePostTearSynergies(player, orb)
   end
 
   if (player:HasCollectible(CollectibleType.COLLECTIBLE_GHOST_PEPPER)) then
-    local prob = math.min(1/(12 - player.Luck), 0.5)
+    local prob = player.Luck < 10 and 1/(12 - player.Luck) or 0.5
     if Const.rng:RandomFloat() < prob then
       local fire = Utils.SpawnEntity(EntityType.ENTITY_EFFECT, EffectVariant.BLUE_FLAME, orb.entity.Position, Vector(10, 0), player):ToEffect()
+      fire.CollisionDamage = player.Damage * 4
       if fire then
         PlayerUtils.GetPlayerData(player).effectOrbit:add(player, fire)
       end
@@ -283,9 +337,10 @@ function OrbitingTears.CalculatePostTearSynergies(player, orb)
   end
 
   if (player:HasCollectible(CollectibleType.COLLECTIBLE_BIRDS_EYE)) then
-    local prob = math.min(1/(12 - player.Luck), 0.5)
+    local prob = player.Luck < 10 and 1/(12 - player.Luck) or 0.5
     if Const.rng:RandomFloat() < prob then
       local fire = Utils.SpawnEntity(EntityType.ENTITY_EFFECT, EffectVariant.RED_CANDLE_FLAME, orb.entity.Position, Vector.Zero, player):ToEffect()
+      fire.CollisionDamage = player.Damage * 4
       if fire then
         PlayerUtils.GetPlayerData(player).effectOrbit:add(player, fire)
       end
@@ -355,20 +410,29 @@ function OrbitingTears.TryAbsorbTears(player)
           table.insert(playerData.ludodivo.ExpFrames, Const.game:GetFrameCount() + player.TearRange)
         elseif player:HasCollectible(CollectibleType.COLLECTIBLE_DR_FETUS) then
           tear = player:FireBomb(proj.Position, proj.Velocity, player)
-        elseif player:HasCollectible(CollectibleType.COLLECTIBLE_TECHNOLOGY) and (not hasCSection) then
-          local nearestEnemy = Utils.GetClosestEnemies(player.Position)
-          if nearestEnemy then
-            local direction = (nearestEnemy.Position - player.Position):Normalized()
-            local laser = player:FireTechLaser(proj.Position, LaserOffset.LASER_TECH1_OFFSET, direction, false, true,
-            player, multiplier)
-            laser:SetMaxDistance(playerData.orbitRange.max)
-          end
         elseif (
           player:HasCollectible(CollectibleType.COLLECTIBLE_TECH_X) or
           player:HasCollectible(CollectibleType.COLLECTIBLE_BRIMSTONE) or
           player:GetEffects():HasTrinketEffect(TrinketType.TRINKET_AZAZELS_STUMP)
         ) then
           tear = player:FireTechXLaser(proj.Position, Vector.Zero, 5, player, multiplier)
+        elseif player:HasCollectible(CollectibleType.COLLECTIBLE_TECHNOLOGY) and (not hasCSection) then
+          if Utils.IsTheSun(player) then
+            tear = player:FireTechXLaser(proj.Position, Vector.Zero, 2, player, multiplier)
+          else
+            local techEffect = Utils.SpawnEntity(
+              EntityType.ENTITY_EFFECT,
+              EffectVariant.BIG_KNIFE,
+              proj.Position,
+              Vector.Zero,
+              player
+            ):ToEffect()
+            if techEffect then
+              techEffect.Scale = 0.5 * multiplier
+              techEffect.CollisionDamage = 10
+              playerData.effectOrbit:add(player, techEffect)
+            end
+          end
         elseif player:HasCollectible(CollectibleType.COLLECTIBLE_MOMS_KNIFE) then
           local a = Isaac.Spawn(EntityType.ENTITY_KNIFE, 0, 0, player.Position, Vector.Zero, player):ToKnife()
           a.Visible = true
@@ -390,17 +454,26 @@ function OrbitingTears.TryAbsorbTears(player)
         proj:Remove()
         proj:GetData().theSunIsAbsorbed = true
         if player:HasCollectible(CollectibleType.COLLECTIBLE_TECHNOLOGY_2) then
-          local extra = math.max(1, math.ceil(player.MaxFireDelay))
-          if (playerData.technologyTwoLaser and playerData.technologyTwoLaser:Exists()) then
-            --- setTimeout actually accepts a number
-            ---@diagnostic disable-next-line: param-type-mismatch
-            playerData.technologyTwoLaser:SetTimeout(playerData.technologyTwoLaser.Timeout + extra)
+          if Utils.IsTheSun(player) then
+            local extra = math.max(1, math.ceil(player.MaxFireDelay))
+            if (playerData.technologyTwoLaser and playerData.technologyTwoLaser:Exists()) then
+              --- setTimeout actually accepts a number
+              ---@diagnostic disable-next-line: param-type-mismatch
+              playerData.technologyTwoLaser:SetTimeout(playerData.technologyTwoLaser.Timeout + extra)
+            else
+              local laser = player:FireTechXLaser(proj.Position, Vector.Zero, 100, player, 0.1)
+              --- setTimeout actually accepts a number
+              ---@diagnostic disable-next-line: param-type-mismatch
+              laser:SetTimeout(extra)
+              playerData.technologyTwoLaser = laser
+            end
           else
-            local laser = player:FireTechXLaser(proj.Position, Vector.Zero, 100, player, 0.1)
-            --- setTimeout actually accepts a number
-            ---@diagnostic disable-next-line: param-type-mismatch
-            laser:SetTimeout(extra)
-            playerData.technologyTwoLaser = laser
+            local nearestEnemy = Utils.GetClosestEnemies(player.Position)
+            if nearestEnemy then
+              local direction = (nearestEnemy.Position - proj.Position):Normalized()
+              player:FireTechLaser(proj.Position, LaserOffset.LASER_TECH1_OFFSET, direction, false, true,
+              player, multiplier)
+            end
           end
         end
         if tear then

@@ -43,10 +43,18 @@ local cachedRoomShape = RoomShape.ROOMSHAPE_1x1
 local cachedPlayerCount = 1
 
 ---@param player EntityPlayer
-function theSunMod:GiveCostumesOnInit(player)
-  if not Utils.IsTheSun(player) then return end
+function theSunMod:PlayerInit(player)
+  local cachePlayer = false
+  if Utils.IsTheSun(player) then
+    player:AddNullCostume(Const.HairCostume)
+    cachePlayer = true
+  elseif Utils.IsPluto(player) then
+    player.SizeMulti = Vector(0.5, 0.5)
+    player:ClearCostumes()
+    cachePlayer = true
+  end
 
-  player:AddNullCostume(Const.HairCostume)
+  if not cachePlayer then return end
 
   local players = Utils.GetPlayers()
   if #players ~= cachedPlayerCount then
@@ -57,7 +65,7 @@ function theSunMod:GiveCostumesOnInit(player)
     end
   end
 end
-theSunMod:AddCallback(ModCallbacks.MC_POST_PLAYER_INIT, theSunMod.GiveCostumesOnInit)
+theSunMod:AddCallback(ModCallbacks.MC_POST_PLAYER_INIT, theSunMod.PlayerInit)
 
 ---@param player EntityPlayer
 function theSunMod:onEvaluateCacheRange(player)
@@ -77,19 +85,38 @@ theSunMod:AddCallback(ModCallbacks.MC_EVALUATE_CACHE, theSunMod.onEvaluateCacheF
 
 ---@param player EntityPlayer
 function theSunMod:onEvaluateCacheFireDelay(player)
-  if not Utils.IsTheSun(player) then return end
-
+  if not Utils.HasOrbit(player) then return end
   player.MaxFireDelay = playerInRoomMultiplier[cachedPlayerCount] * roomMultiplier[cachedRoomShape] * player.MaxFireDelay
   
   log.Value("onEvaluateCacheFireDelay", player.MaxFireDelay)
 end
 theSunMod:AddCallback(ModCallbacks.MC_EVALUATE_CACHE, theSunMod.onEvaluateCacheFireDelay, CacheFlag.CACHE_FIREDELAY)
 
+---@param player EntityPlayer
+function theSunMod:onEvaluateCacheDamage(player)
+  if not Utils.IsPluto(player) then return end
+
+  player.Damage = player.Damage * 1.5
+end
+theSunMod:AddCallback(ModCallbacks.MC_EVALUATE_CACHE, theSunMod.onEvaluateCacheDamage, CacheFlag.CACHE_DAMAGE)
+
+---@param player EntityPlayer
+theSunMod:AddCallback(ModCallbacks.MC_EVALUATE_CACHE, function(_, player)
+  if Utils.IsPluto(player) then
+    log.Value("pre onEvaluateCacheSize", player.SizeMulti)
+    -- player.SizeMulti = Vector(0.5, 0.5)
+    log.Value("onEvaluateCacheSize", {
+      Size = player.Size,
+      SizeMulti = player.SizeMulti,
+    })
+  end
+end, CacheFlag.CACHE_SIZE);
+
 ---@param entity Entity
 function theSunMod:OnEntityDeath(entity)
   if entity.SpawnerEntity and entity.Type == EntityType.ENTITY_FAMILIAR and entity.Variant == FamiliarVariant.BLUE_SPIDER then
     local player = entity.SpawnerEntity:ToPlayer()
-    if not player or not Utils.IsTheSun(player) then return end
+    if not player or not Utils.HasOrbit(player) then return end
     local playerData = PlayerUtils.GetPlayerData(player)
     playerData.friendlySpiderCount = math.max(0, playerData.friendlySpiderCount - 1)
   end
@@ -129,7 +156,7 @@ function theSunMod:OnBombCollision(bomb, collider)
     return
   end
   local player = bomb.SpawnerEntity:ToPlayer()
-  if not player or not Utils.IsTheSun(player) then
+  if not player or not Utils.HasOrbit(player) then
     return
   end
   if collider:IsActiveEnemy() and collider:IsVulnerableEnemy() then
@@ -153,7 +180,7 @@ function theSunMod:OnTearCollision(tear, collider)
   --tear.CollisionDamage = 2
   
   local player = tear.SpawnerEntity:ToPlayer()
-  if not player or not Utils.IsTheSun(player) then
+  if not player or not Utils.HasOrbit(player) then
     return
   end
   local playerData = PlayerUtils.GetPlayerData(player)
@@ -191,7 +218,7 @@ function theSunMod:OnUpdate(player)
   -- local itemConfigPluto = Isaac.GetItemConfig():GetCollectible(CollectibleType.COLLECTIBLE_PLUTO)
   -- player:RemoveCostume(itemConfigPluto)
 
-  if not Utils.IsTheSun(player) then return end
+  if not Utils.HasOrbit(player) then return end
 
   local frameCount = Const.game:GetFrameCount()
   local room = Const.game:GetRoom()
@@ -219,16 +246,25 @@ function theSunMod:OnUpdate(player)
       else
         WallFire.WallShot(player)
       end
-      player.FireDelay = 120 -- player.MaxFireDelay
-    end
-    if player:HasCollectible(CollectibleType.COLLECTIBLE_TECH_5) then
-      if frameCount % 4 == 0 and Const.rng:RandomFloat() < 0.18 then
-        local laser = player:FireTechXLaser(player.Position, player.Velocity, playerData.orbitRange.act, player)
-        --- setTimeout actually accepts a number
-        ---@diagnostic disable-next-line: param-type-mismatch
-        laser:SetTimeout(5)
-        laser.OneHit = true
+      if player:HasCollectible(CollectibleType.COLLECTIBLE_TECH_5) then
+        if frameCount % 4 == 0 and Const.rng:RandomFloat() < 0.18 then
+          if Utils.IsTheSun(player) then
+            local laser = player:FireTechXLaser(player.Position, player.Velocity, playerData.orbitRange.act, player)
+            --- setTimeout actually accepts a number
+            ---@diagnostic disable-next-line: param-type-mismatch
+            laser:SetTimeout(5)
+            laser.OneHit = true
+          else
+            local nearestEnemy = Utils.GetClosestEnemies(player.Position)
+            if nearestEnemy then
+              local direction = (nearestEnemy.Position - player.Position):Normalized()
+              player:FireTechLaser(player.Position, LaserOffset.LASER_TECH5_OFFSET, direction, false, true,
+                player, 1)
+            end
+          end
+        end
       end
+      player.FireDelay = player.MaxFireDelay
     end
 
     ::skipShot::
@@ -247,6 +283,12 @@ function theSunMod:OnUpdate(player)
     end
 
     OrbitingTears.TryAbsorbTears(player)
+    if Utils.IsPluto(player) then
+      -- local target
+      if player:GetShootingInput():Length() > 0 or (player:HasCollectible(CollectibleType.COLLECTIBLE_MARKED) and Utils.GetMarkedTarget(player)) then
+        OrbitingTears.VengefulRelease(player)
+      end
+    end
   end
 
   OrbitingTears.UpdateOrbitingRadius(player)
@@ -261,7 +303,7 @@ theSunMod:AddCallback(ModCallbacks.MC_POST_PEFFECT_UPDATE, theSunMod.OnUpdate)
 --- @param pillEffect PillEffect
 --- @param player EntityPlayer
 function theSunMod:OnUsePill(pillEffect, player, _)
-  if pillEffect == PillEffect.PILLEFFECT_WIZARD and Utils.IsTheSun(player) then
+  if pillEffect == PillEffect.PILLEFFECT_WIZARD and Utils.HasOrbit(player) then
     PlayerUtils.GetPlayerData(player).wizardRemainingFrames = 30 * Const.FPS -- 30 segundos
   end
 end
@@ -273,7 +315,7 @@ function theSunMod:HandleBlueTearUpdate(tear)
   --- Accessing the initialized entity on MC_POST_TEAR_INIT does provide incomplete data in some use cases
   if tear.FrameCount == 1 then
     local player = tear.SpawnerEntity:ToPlayer()
-    if not player or not Utils.IsTheSun(player) then return end
+    if not player or not Utils.HasOrbit(player) then return end
     local color = Utils.GetColorOffset(tear)
 
     if color then
@@ -298,7 +340,7 @@ function theSunMod:HandleStoneTearUpdate(tear)
     --   Flags = log.Flag("tear", tear.TearFlags),
     -- })
     local player = tear.SpawnerEntity:ToPlayer()
-    if not player or not Utils.IsTheSun(player) then return end
+    if not player or not Utils.HasOrbit(player) then return end
     local playerData = PlayerUtils.GetPlayerData(player)
     local tearHash = GetPtrHash(tear)
     if playerData.tearOrbit.list[tearHash] then
@@ -342,7 +384,7 @@ function theSunMod:HandleEffectInit(effect)
       end
     end
   end
-  if closestPlayer and Utils.IsTheSun(closestPlayer) then
+  if closestPlayer and Utils.HasOrbit(closestPlayer) then
     PlayerUtils.GetPlayerData(closestPlayer).effectOrbit:add(closestPlayer, effect)
   end
 end
@@ -384,7 +426,7 @@ function theSunMod:HandleProjInit(proj)
   if not player then
     return
   end
-  if not Utils.IsTheSun(player) then
+  if not Utils.HasOrbit(player) then
     return
   end
 end
@@ -459,7 +501,7 @@ end)
 ---@param countdownFrames integer
 function theSunMod:OnTakeDamage(entity, amount, flags, source, countdownFrames)
   local player = entity:ToPlayer()
-  if not player or not Utils.IsTheSun(player) then return end
+  if not player or not Utils.HasOrbit(player) then return end
 
   -- Verifica que no esté muerto ni en animaciones raras
   local health = player:GetHearts() + player:GetSoulHearts() + player:GetBoneHearts()
@@ -490,17 +532,6 @@ end
 theSunMod:AddCallback(ModCallbacks.MC_POST_UPDATE, ForceColorEveryFrame)
 --------------------------------------------------------------------------------------------------
 
-local PLUTO_TYPE = Isaac.GetPlayerTypeByName("Pluto", true)
 
----@param player EntityPlayer
-function theSunMod:PlutoInit(player)
-  if player:GetPlayerType() ~= PLUTO_TYPE then
-    return
-  end
-  player:AddCollectible(CollectibleType.COLLECTIBLE_PLUTO)
-  local itemConfigPluto = Isaac.GetItemConfig():GetCollectible(CollectibleType.COLLECTIBLE_PLUTO)
-  player:RemoveCostume(itemConfigPluto)
-  local pool = Const.game:GetItemPool()
-  pool:RemoveCollectible(CollectibleType.COLLECTIBLE_PLUTO)
-end
-theSunMod:AddCallback(ModCallbacks.MC_POST_PLAYER_INIT, theSunMod.PlutoInit)
+
+

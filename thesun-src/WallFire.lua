@@ -92,15 +92,17 @@ function WallFire.SpawnBulletWall(player, spawnPos, velocity)
     EntityType.ENTITY_PROJECTILE,
     ProjectileVariant.PROJECTILE_NORMAL,
     spawnPos,
-    velocity,
-    player
+    velocity
   ):ToProjectile()
   if not proj then return end
   Store.WallProjectiles[GetPtrHash(proj)] = proj
-  proj:AddProjectileFlags(ProjectileFlags.GHOST | ProjectileFlags.CANT_HIT_PLAYER)
+  proj:AddProjectileFlags(ProjectileFlags.GHOST)
+  if Utils.IsTheSun(player) or player:HasCollectible(CollectibleType.COLLECTIBLE_BIRTHRIGHT) then
+    proj:AddProjectileFlags(ProjectileFlags.CANT_HIT_PLAYER)
+  end
   proj.FallingAccel = -0.1
   proj.FallingSpeed = 0
-  proj.Scale = 0.25   -- GetProjectileScale(player.Damage)
+  proj.Scale = 0.25
 end
 
 ---@param player EntityPlayer

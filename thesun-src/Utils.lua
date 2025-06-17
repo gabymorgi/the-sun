@@ -12,12 +12,14 @@ local Const = require("thesun-src.Const")
 ---@field Clamp fun(value: number, min: number, max: number): number
 ---@field SpawnEntity fun(entityType: EntityType, variant: number, spawnPos: Vector, velocity: Vector, player?: EntityPlayer, subType?: number, seed?: number): Entity
 ---@field IsTheSun fun(player: EntityPlayer): boolean
+---@field IsPluto fun(player: EntityPlayer): boolean
+---@field HasOrbit fun(player: EntityPlayer): boolean
 ---@field GetPlayers fun(): EntityPlayer[]
 ---@field GetEnemiesInRange fun(position: Vector, radius: number): Entity[]
 ---@field GetClosestEnemies fun(position: Vector): Entity?
+---@field GetClosestEnemiesInCone fun(position: Vector, direction: Vector, radius: number, minAngle: number, maxAngle: number): Entity?
 ---@field GetMarkedTarget fun(player: EntityPlayer): EntityEffect | nil
 ---@field GetExtraBulletTrain fun(player: EntityPlayer): number
----@field GetMarkedTarget fun(player: EntityPlayer): EntityEffect | nil
 ---@field GetHeadVector fun(player: EntityPlayer): Vector
 ---@field GetShootVector fun(player: EntityPlayer): Vector
 ---@field GetFlattenedOrbitPosition fun(player: EntityPlayer, angle: number, radius: number): Vector
@@ -130,10 +132,19 @@ end
 ---@param player EntityPlayer
 ---@return boolean
 function Utils.IsTheSun(player)
-  if (player:GetPlayerType() == Const.TheSunType) then
-    return true
-  end
-  return false
+  return player:GetPlayerType() == Const.TheSunType
+end
+
+---@param player EntityPlayer
+---@return boolean
+function Utils.IsPluto(player)
+  return player:GetPlayerType() == Const.PlutoType
+end
+
+---@param player EntityPlayer
+---@return boolean
+function Utils.HasOrbit(player)
+  return player:GetPlayerType() == Const.TheSunType or player:GetPlayerType() == Const.PlutoType
 end
 
 -- for _,player in pairs(GetPlayers()) do
@@ -142,7 +153,7 @@ function Utils.GetPlayers()
   local players = {}
   for i = 0, Const.game:GetNumPlayers() - 1 do
     local player = Const.game:GetPlayer(i)
-    if Utils.IsTheSun(player) then
+    if Utils.HasOrbit(player) then
       table.insert(players, player)
     end
   end
@@ -176,6 +187,38 @@ function Utils.GetClosestEnemies(position)
       end
     end
   end
+  return nearestEnemy
+end
+
+---@param position Vector
+---@param direction Vector -- dirección central del cono
+---@param radius number -- radio del cono
+---@param minAngle number  -- en grados, relativo a la dirección
+---@param maxAngle number  -- en grados, relativo a la dirección
+---@return Entity?
+function Utils.GetClosestEnemiesInCone(position, direction, radius, minAngle, maxAngle)
+  local nearestEnemy
+  local minDist = math.huge
+  local dirAngle = direction:GetAngleDegrees()
+
+  for _, entity in pairs(Utils.GetEnemiesInRange(position, radius)) do
+    if entity:IsVulnerableEnemy() and not entity:IsDead() then
+      local toEnemy = entity.Position - position
+      local angleToEnemy = toEnemy:GetAngleDegrees() - dirAngle
+
+      -- Normalizar ángulo entre -180 y 180
+      angleToEnemy = (angleToEnemy + 180) % 360 - 180
+
+      if angleToEnemy >= minAngle and angleToEnemy <= maxAngle then
+        local dist = toEnemy:LengthSquared()
+        if dist < minDist then
+          minDist = dist
+          nearestEnemy = entity
+        end
+      end
+    end
+  end
+
   return nearestEnemy
 end
 
@@ -217,12 +260,17 @@ end
 ---@param player EntityPlayer
 ---@return Vector
 function Utils.GetShootVector(player)
+  if player:HasCollectible(CollectibleType.COLLECTIBLE_MARKED) then
+    local target = Utils.GetMarkedTarget(player)
+    if target then
+      return (target.Position - player.Position):Normalized()
+    end
+  end
   if not player:HasCollectible(CollectibleType.COLLECTIBLE_ANALOG_STICK) then
     local fireDirection = player:GetFireDirection()
     return DIRECTION_MAP[fireDirection]
-  else
-    return player:GetAimDirection()
   end
+  return player:GetAimDirection()
 end
 
 function Utils.GetFlattenedOrbitPosition(player, angle, radius)

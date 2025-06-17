@@ -401,32 +401,102 @@ local flags = {
     "DAMAGE_IGNORE_ARMOR",
     "DAMAGE_SPAWN_CARD",
     "DAMAGE_SPAWN_RUNE",
-  }
+  },
+  projectileFlags = {
+    [0] = "SMART",
+    "EXPLODE",
+    "ACID_GREEN",
+    "GOO",
+    "GHOST",
+    "WIGGLE",
+    "BOOMERANG",
+    "HIT_ENEMIES",
+    "ACID_RED",
+    "GREED",
+    "RED_CREEP",
+    "ORBIT_CW",
+    "ORBIT_CCW",
+    "NO_WALL_COLLIDE",
+    "CREEP_BROWN",
+    "FIRE",
+    "BURST",
+    "ANY_HEIGHT_ENTITY_HIT",
+    "CURVE_LEFT",
+    "CURVE_RIGHT",
+    "TURN_HORIZONTAL",
+    "SINE_VELOCITY",
+    "MEGA_WIGGLE",
+    "SAWTOOTH_WIGGLE",
+    "SLOWED",
+    "TRIANGLE",
+    "MOVE_TO_PARENT",
+    "ACCELERATE",
+    "DECELERATE",
+    "BURST3",
+    "CONTINUUM",
+    "CANT_HIT_PLAYER",
+    "CHANGE_FLAGS_AFTER_TIMEOUT",
+    "CHANGE_VELOCITY_AFTER_TIMEOUT",
+    "STASIS",
+    "FIRE_WAVE",
+    "FIRE_WAVE_X",
+    "ACCELERATE_EX",
+    "BURST8",
+    "FIRE_SPAWN",
+    "ANTI_GRAVITY",
+    "TRACTOR_BEAM",
+    "BOUNCE",
+    "BOUNCE_FLOOR",
+    "SHIELDED",
+    "BLUE_FIRE_SPAWN",
+    "LASER_SHOT",
+    "GODHEAD",
+    "SMART_PERFECT",
+    "BURSTSPLIT",
+    "WIGGLE_ROTGUT",
+    "FREEZE",
+    "ACCELERATE_TO_POSITION",
+    "BROCCOLI",
+    "BACKSPLIT",
+    "SIDEWAVE",
+    "ORBIT_PARENT",
+    "FADEOUT",
+  },
 }
 
 --- Devuelve los flags activos para un valor dado de BitSet128
---- @param type string
+--- @param key string
 --- @param bitSet BitSet128 | any
 --- @return string
-function log.Flag(type, bitSet)
-  local flagKey = type .. "Flags"
+function log.Flag(key, bitSet)
+  local flagKey = key .. "Flags"
   local result = {}
   local map = flags[flagKey]
   if not map then
     return "Unknown"
   end
-
-  if bitSet.l == 0 and bitSet.h == 0 then
-    table.insert(result, map[0])
-  end
-  for i = 0, 63 do
-    if bitSet.l & (1 << i) ~= 0 then
-      table.insert(result, map[i + 1])
+  if type(bitSet) ~= "table" then
+    if bitSet == 0 then
+      table.insert(result, map[0])
     end
-  end
-  for i = 64, 127 do
-    if bitSet.h & (1 << (i - 64)) ~= 0 then
-      table.insert(result, map[i + 1])
+    for i = 0, 63 do
+      if bitSet & (1 << i) ~= 0 then
+        table.insert(result, map[i])
+      end
+    end
+  else
+    if bitSet.l == 0 and bitSet.h == 0 then
+      table.insert(result, map[0])
+    end
+    for i = 0, 63 do
+      if bitSet.l & (1 << i) ~= 0 then
+        table.insert(result, map[i + 1])
+      end
+    end
+    for i = 64, 127 do
+      if bitSet.h & (1 << (i - 64)) ~= 0 then
+        table.insert(result, map[i + 1])
+      end
     end
   end
 

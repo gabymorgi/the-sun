@@ -47,6 +47,8 @@ end
 ---@param orbital EntityOrbital
 ---@param tearLifetime? number
 function Orbit:add(player, orbital, tearLifetime)
+  local lifeTime = Utils.IsPluto(player) and math.maxinteger or
+    Game():GetFrameCount() + (tearLifetime or player.TearRange / 2)
   local orbitalHash = GetPtrHash(orbital)
   if self.list[orbitalHash] then return self.list[orbitalHash] end
   self.list[orbitalHash] = {
@@ -54,7 +56,7 @@ function Orbit:add(player, orbital, tearLifetime)
     direction = Utils.GetClockWiseSign(player.Position, orbital),
     radius = (orbital.Position - player.Position):Length(),
     angle = Utils.GetAngle(player.Position, orbital.Position),
-    expirationFrame = Game():GetFrameCount() + (tearLifetime or player.TearRange / 2),
+    expirationFrame = lifeTime,
     flags = 0,
   }
   self.length = self.length + 1
@@ -93,14 +95,9 @@ function TearOrbit:add(player, orbital)
   orbital:AddTearFlags(TearFlags.TEAR_SPECTRAL)
   if (orbital.Type == EntityType.ENTITY_TEAR) then
     -- worm flags modifies unexpectedly the tear
-    if orbital:HasTearFlags(TearFlags.TEAR_HYDROBOUNCE) then
-      -- orbital.Height = -10
-      orbital.FallingAcceleration = 1
-    else
-      orbital.Height = -10
-      orbital.FallingAcceleration = -0.1
-      orbital.FallingSpeed = 0
-    end
+    orbital.Height = -10
+    orbital.FallingAcceleration = -0.1
+    orbital.FallingSpeed = 0
 
     for _, flag in ipairs(flagsToTransfer) do
       if orbital:HasTearFlags(TearFlags[flag]) then
@@ -119,6 +116,12 @@ end
 ---@diagnostic disable-next-line: duplicate-set-field
 function TearOrbit:remove(hash)
   local tear = self.list[hash].entity
+  -- return worm flags back
+  for _, flag in ipairs(flagsToTransfer) do
+    if self.list[hash].flags & Const.CustomFlags[flag] ~= 0 then
+      tear:AddTearFlags(TearFlags[flag])
+    end
+  end
   if tear.Type == EntityType.ENTITY_TEAR and tear.Variant ~= TearVariant.FETUS then
     if tear:HasTearFlags(TearFlags.TEAR_CONTINUUM) then
       tear.FallingAcceleration = -0.09

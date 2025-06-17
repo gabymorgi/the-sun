@@ -1,5 +1,6 @@
 ---@class Const
 ---@field TheSunType number
+---@field PlutoType number
 ---@field HairCostume number
 ---@field RADIUS_STEP_MULTIPLIER number
 ---@field GRID_SIZE number
@@ -13,6 +14,7 @@
 local Const = {}
 
 Const.TheSunType = Isaac.GetPlayerTypeByName("TheSun", false)
+Const.PlutoType = Isaac.GetPlayerTypeByName("Pluto", true)
 Const.HairCostume = Isaac.GetCostumeIdByPath("gfx/characters/thesun_hair.anm2")
 Const.RADIUS_STEP_MULTIPLIER = 3
 Const.GRID_SIZE = 40

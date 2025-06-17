@@ -58,7 +58,7 @@ function PlayerUtils.GetPlayerData(player)
       orbitRange = {
         min = Const.GRID_SIZE,
         max = 90,
-        act = Const.GRID_SIZE,
+        act = 100,
       },
       cacheCollectibles = {},
       activeBars = {},
@@ -98,7 +98,6 @@ end
 
 ---@param player EntityPlayer
 function PlayerUtils.HandleNewRoom(player)
-  
   local absorbEffect = Utils.SpawnEntity(
     EntityType.ENTITY_EFFECT,
     ABSORB_ORBIT_VARIANT,
@@ -120,6 +119,10 @@ function PlayerUtils.HandleNewRoom(player)
 
   if (player:HasCollectible(CollectibleType.COLLECTIBLE_LUDOVICO_TECHNIQUE)) then
     AddLudoTear(player)
+  end
+
+  if Utils.IsPluto(player) then
+    player:ClearCostumes()
   end
 end
 
