@@ -2,7 +2,6 @@
 local Utils = include("thesun-src.utils")
 ---@type Const
 local Const = include("thesun-src.Const")
-local log = include("log")
 
 local flagsToTransfer = {
   "TEAR_SQUARE",

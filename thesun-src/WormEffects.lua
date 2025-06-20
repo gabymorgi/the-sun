@@ -1,9 +1,22 @@
-local log = require("log")
-
----@type PlayerUtils
-local PlayerUtils = include("thesun-src.PlayerUtils")
 ---@type Const
 local Const = include("thesun-src.Const")
+
+-- code to calculate steps
+
+-- local step = math.pi / 15
+-- local actStep = 0
+-- for i = 0, 119 do
+--   actStep = actStep + step
+--   wiggleWormSteps[i] = 20 * math.sin(2* actStep)
+--   ringWormSteps[i] = {
+--     a = 0.33 - 0.33 * math.cos(3 * actStep), -- less than 2: sparsed, more than 2: dense
+--     r = 20 * math.sin(3 * actStep)
+--   }
+--   ouroborosWormSteps[i] = {
+--     a = 0.4 + math.sin(actStep / 4 - 2.73),
+--     r = 40 + 60 * math.sin(actStep / 4 - 0.73)
+--   }
+-- end
 
 local hookWormSteps = {
   [0] = 0,
@@ -564,21 +577,6 @@ local ouroborosWormSteps = {
     r = -0.012178100221504,
   }
 }
-
--- local step = math.pi / 15
--- local actStep = 0
--- for i = 0, 119 do
---   actStep = actStep + step
---   wiggleWormSteps[i] = 20 * math.sin(2* actStep)
---   ringWormSteps[i] = {
---     a = 0.33 - 0.33 * math.cos(3 * actStep), -- less than 2: sparsed, more than 2: dense
---     r = 20 * math.sin(3 * actStep)
---   }
---   ouroborosWormSteps[i] = {
---     a = 0.4 + math.sin(actStep / 4 - 2.73),
---     r = 40 + 60 * math.sin(actStep / 4 - 0.73)
---   }
--- end
 
 ---@class WormEffects
 ---@field GetModifiedOrbit fun(orb: Orbital<EntityOrbital>): number, number

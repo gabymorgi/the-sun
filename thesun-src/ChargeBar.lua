@@ -1,5 +1,3 @@
-local log = require("log")
-
 ---@class ChargeBar
 ---@field maxCharge number
 ---@field charge number
@@ -62,7 +60,7 @@ function ChargeBar:render(screenPos)
     end
   end
 
-  self.sprite:Render(screenPos, Vector.Zero, Vector.Zero)
+  self.sprite:Render(screenPos, Vector(0, 0), Vector(0, 0))
   self.sprite:Update()
 end
 

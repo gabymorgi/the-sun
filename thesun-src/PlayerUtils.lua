@@ -102,7 +102,7 @@ function PlayerUtils.HandleNewRoom(player)
     EntityType.ENTITY_EFFECT,
     ABSORB_ORBIT_VARIANT,
     player.Position,
-    Vector.Zero,
+    Vector(0, 0),
     player
   ):ToEffect()
   if absorbEffect then

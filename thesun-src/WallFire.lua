@@ -1,4 +1,3 @@
-local log = include("log")
 ---@type Store
 local Store = require("thesun-src.Store")
 ---@type Const

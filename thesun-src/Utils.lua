@@ -15,6 +15,7 @@ local Const = require("thesun-src.Const")
 ---@field IsPluto fun(player: EntityPlayer): boolean
 ---@field HasOrbit fun(player: EntityPlayer): boolean
 ---@field GetPlayers fun(): EntityPlayer[]
+---@field AnyoneHasOrbit fun(): number?
 ---@field GetEnemiesInRange fun(position: Vector, radius: number): Entity[]
 ---@field GetClosestEnemies fun(position: Vector): Entity?
 ---@field GetClosestEnemiesInCone fun(position: Vector, direction: Vector, radius: number, minAngle: number, maxAngle: number): Entity?
@@ -147,7 +148,6 @@ function Utils.HasOrbit(player)
   return player:GetPlayerType() == Const.TheSunType or player:GetPlayerType() == Const.PlutoType
 end
 
--- for _,player in pairs(GetPlayers()) do
 --- @return EntityPlayer[]
 function Utils.GetPlayers()
   local players = {}
@@ -158,6 +158,18 @@ function Utils.GetPlayers()
     end
   end
   return players
+end
+
+--- @return number?
+function Utils.AnyoneHasOrbit()
+  for i = 0, Const.game:GetNumPlayers() - 1 do
+    local player = Const.game:GetPlayer(i)
+    if Utils.IsTheSun(player) then
+      return Const.TheSunType
+    elseif Utils.IsPluto(player) then
+      return Const.PlutoType
+    end
+  end
 end
 
 ---@param position Vector

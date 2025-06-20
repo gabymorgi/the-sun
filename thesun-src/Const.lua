@@ -4,9 +4,10 @@
 ---@field HairCostume number
 ---@field RADIUS_STEP_MULTIPLIER number
 ---@field GRID_SIZE number
+---@field AbsorbRange number
+---@field AbsorbRangeSquared number
 ---@field game Game
 ---@field rng RNG
----@field HALF_PI number
 ---@field TWO_PI number
 ---@field FPS number
 ---@field CustomFlags any
@@ -18,9 +19,10 @@ Const.PlutoType = Isaac.GetPlayerTypeByName("Pluto", true)
 Const.HairCostume = Isaac.GetCostumeIdByPath("gfx/characters/thesun_hair.anm2")
 Const.RADIUS_STEP_MULTIPLIER = 3
 Const.GRID_SIZE = 40
+Const.AbsorbRange = 60
+Const.AbsorbRangeSquared = Const.AbsorbRange * Const.AbsorbRange
 Const.game = Game()
 Const.rng = RNG()
-Const.HALF_PI = math.pi / 2
 Const.TWO_PI = math.pi * 2
 Const.FPS = 25
 Const.CustomFlags = {

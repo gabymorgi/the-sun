@@ -2,6 +2,7 @@
 ---@field PlayerData Dict<PlayerData>
 ---@field WallProjectiles Dict<EntityProjectile>
 ---@field prismCachedCount number
+---@field releasedTears Dict<{ tear: EntityTear, velocity: Vector, expirationFrame: number }>
 
 local Store = {}
 
@@ -11,5 +12,6 @@ Store.PlayerData = {}
 Store.WallProjectiles = {}
 ---@type number
 Store.prismCachedCount = 0
+Store.releasedTears = {}
 
 return Store
