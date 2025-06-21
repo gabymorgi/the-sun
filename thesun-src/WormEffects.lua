@@ -1,3 +1,4 @@
+local log = include("log")
 ---@type Const
 local Const = include("thesun-src.Const")
 

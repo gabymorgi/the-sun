@@ -1,3 +1,4 @@
+local log = include("log")
 ---@type Utils
 local Utils = include("thesun-src.utils")
 ---@type Const

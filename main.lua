@@ -1,6 +1,7 @@
 ---@alias EntityOrbital EntityTear | EntityProjectile | EntityEffect
 ---@class Dict<T>: { [number]: T }
 
+local log = include("log")
 include("thesun-src.Eid")
 ---@type Store
 local Store = require("thesun-src.Store")
@@ -165,10 +166,7 @@ function theSunMod:OnTearCollision(tear, collider)
     -- sticky: explosivo - sinus infection - mucormycosis
     local isSticky = tear:HasTearFlags(TearFlags.TEAR_STICKY | TearFlags.TEAR_BOOGER | TearFlags.TEAR_SPORE)
     if not isPiercing or isSticky then
-      if tear:HasTearFlags(TearFlags.TEAR_BOUNCE) and not playerData.tearOrbit.list[tearHash].bounced then
-        playerData.tearOrbit.list[tearHash].bounced = true
-        playerData.tearOrbit.list[tearHash].direction = -playerData.tearOrbit.list[tearHash].direction
-      else
+      if tear:HasTearFlags(TearFlags.TEAR_BOUNCE) then
         playerData.tearOrbit:remove(tearHash)
       end
     end

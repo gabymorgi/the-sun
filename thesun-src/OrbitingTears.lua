@@ -1,3 +1,4 @@
+local log = include("log")
 ---@type PlayerUtils
 local PlayerUtils = include("thesun-src.PlayerUtils")
 ---@type Const
@@ -208,7 +209,10 @@ function OrbitingTears.SpinOrbitingTears(player, entityOrbit, checkWorm)
   for _, orb in pairs(entityOrbit.list) do
     local vel = player.ShotSpeed * Utils.FastInvSqrt(orb.radius)
     orb.angle = orb.angle + orb.direction * vel
-    local angle, radius = checkWorm and WormEffects.GetModifiedOrbit(orb) or orb.angle, orb.radius
+    local angle, radius = orb.angle, orb.radius
+    if checkWorm then
+      angle, radius = WormEffects.GetModifiedOrbit(orb)
+    end
     local offset
     if playerData.cacheCollectibles[CollectibleType.COLLECTIBLE_TRACTOR_BEAM] then
       offset = Utils.GetFlattenedOrbitPosition(player, angle, radius)
@@ -503,14 +507,20 @@ function OrbitingTears.TryAbsorbTears(player)
   end
 end
 
+local gridOffsets = {
+  Vector(0, 0),                                                       -- center
+  Vector(40, 0), Vector(-40, 0), Vector(0, 40), Vector(0, -40),       -- cardinals
+  Vector(40, 40), Vector(-40, 40), Vector(40, -40), Vector(-40, -40), -- diagonals
+  Vector(80, 0), Vector(-80, 0), Vector(0, 80), Vector(0, -80),       -- second layer cardinals
+}
+
 --- @param player EntityPlayer
 function OrbitingTears.TryAbsorbEntities(player)
   for _, entity in ipairs(Isaac.GetRoomEntities()) do
     if entity.Type == EntityType.ENTITY_FIREPLACE then
       local dist = player.Position:DistanceSquared(entity.Position)
       if dist < Const.AbsorbRangeSquared then
-        if (entity:GetSprite():GetAnimation() == "Flickering") then
-          entity:TakeDamage(1, 0, EntityRef(player), 0)
+        if entity.HitPoints > 1 and entity.Variant < 2 then -- only orange and red
           local fire = Utils.SpawnEntity(EntityType.ENTITY_EFFECT, EffectVariant.RED_CANDLE_FLAME, entity.Position,
             Vector(0, 0), player):ToEffect()
           fire.CollisionDamage = player.Damage
@@ -522,18 +532,17 @@ function OrbitingTears.TryAbsorbEntities(player)
     elseif entity.Type == EntityType.ENTITY_POOP then
       local dist = player.Position:DistanceSquared(entity.Position)
       if dist < Const.AbsorbRangeSquared then
-        if (entity:GetSprite():GetAnimation() ~= "State5") then
-          entity:TakeDamage(1, 0, EntityRef(player), 0)
+        local isDamage = entity:TakeDamage(1, 0, EntityRef(player), 0)
+        if isDamage then
           local tear = player:FireTear(entity.Position, Vector(0, 0), false, true, false)
-          tear:AddTearFlags(TearFlags.TEAR_SPECTRAL | TearFlags.TEAR_HOMING)
           if tear then
+            tear:ChangeVariant(TearVariant.BALLOON_BRIMSTONE)
             PlayerUtils.GetPlayerData(player).tearOrbit:add(player, tear)
           end
         end
       end
     elseif entity.Type == EntityType.ENTITY_LASER then
       local laser = entity:ToLaser()
-
       -- Asegurar que no es friendly (jugador o familiar)
       if laser and not laser:HasCommonParentWithEntity(player) then
         local samples = laser:GetSamples()
@@ -575,6 +584,26 @@ function OrbitingTears.TryAbsorbEntities(player)
           end
         end
         ::continue::
+      end
+    end
+  end
+
+  local room = Game():GetRoom()
+  local playerPos = player.Position
+  
+
+  for _, offset in ipairs(gridOffsets) do
+    local checkPos = playerPos + offset
+    local gridEntity = room:GetGridEntityFromPos(checkPos)
+    if gridEntity and gridEntity:GetType() == GridEntityType.GRID_POOP then
+      local poop = gridEntity:ToPoop()
+      local isDamage = poop:Hurt(1)
+      if poop and isDamage then
+        local tear = player:FireTear(checkPos, Vector(0, 0), false, true, false)
+        if tear then
+          tear:ChangeVariant(TearVariant.BALLOON_BRIMSTONE)
+          PlayerUtils.GetPlayerData(player).tearOrbit:add(player, tear)
+        end
       end
     end
   end

@@ -117,8 +117,8 @@ local function GetWallSpawn(player)
   local pos, dir
   if wallDirection % 2 == 1 then
     -- Top o Bottom
-    local x = Const.rng:RandomInt(gridSize.X)
-    pos = Vector(topLeftPos.X + x * Const.GRID_SIZE + 20, 0)
+    local x = Const.rng:RandomInt(gridSize.X - 1)
+    pos = Vector(topLeftPos.X + x * Const.GRID_SIZE + 40, 0)
 
     if wallDirection == 1 then -- Top
       if (roomShape == RoomShape.ROOMSHAPE_LTL and x < 13) or (roomShape == RoomShape.ROOMSHAPE_LTR and x >= 13) then
@@ -137,8 +137,8 @@ local function GetWallSpawn(player)
     end
   else
     -- Left o Right
-    local y = Const.rng:RandomInt(gridSize.Y)
-    pos = Vector(0, topLeftPos.Y + y * Const.GRID_SIZE + 20)
+    local y = Const.rng:RandomInt(gridSize.Y - 1)
+    pos = Vector(0, topLeftPos.Y + y * Const.GRID_SIZE + 40)
 
     if wallDirection == 0 then -- Left
       if (roomShape == RoomShape.ROOMSHAPE_LTL and y < 7) or (roomShape == RoomShape.ROOMSHAPE_LBL and y >= 7) then
