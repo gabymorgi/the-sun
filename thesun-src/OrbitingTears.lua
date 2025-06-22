@@ -11,6 +11,7 @@ local Store = require("thesun-src.Store")
 local WormEffects = include("thesun-src.WormEffects")
 
 ---@class OrbitingTears
+---@field DropRelease fun(player: EntityPlayer)
 ---@field VengefulRelease fun(player: EntityPlayer)
 ---@field ReleaseHomingTears fun(player: EntityPlayer)
 ---@field ExpandHomingTears fun(player: EntityPlayer, releaseOrbit: boolean?)
@@ -36,6 +37,31 @@ function AddLudoMult(ludodivo, mult)
   ludodivo.Multiplier = ludodivo.Multiplier + step
   ludodivo.Tear.Scale = ludodivo.Tear.Scale + step
   ludodivo.Tear.CollisionDamage = ludodivo.BaseDamage * ludodivo.Multiplier
+end
+
+--- @param player EntityPlayer
+function OrbitingTears.DropRelease(player)
+  local playerData = PlayerUtils.GetPlayerData(player)
+  for hash, orb in pairs(playerData.tearOrbit.list) do
+    playerData.tearOrbit:remove(hash)
+  end
+  for hash, orb in pairs(playerData.projOrbit.list) do
+    playerData.projOrbit:remove(hash)
+  end
+  for hash, orb in pairs(playerData.effectOrbit.list) do
+    if orb.entity.Variant == EffectVariant.BRIMSTONE_BALL then
+      player:FireTechLaser(orb.entity.Position, LaserOffset.LASER_TECH1_OFFSET, orb.entity.Velocity:Normalized(), false,
+        true, player, 1)
+      orb.entity:Remove()
+    elseif (orb.entity.Type == EntityType.ENTITY_TEAR) then --knives
+      Store.releasedTears[GetPtrHash(orb.entity)] = {
+        tear = orb.entity --[[@as EntityTear]],
+        velocity = orb.entity.Velocity,
+        expirationFrame = 120
+      }
+    end
+    playerData.effectOrbit:remove(hash)
+  end
 end
 
 --- @param player EntityPlayer
@@ -259,7 +285,7 @@ function OrbitingTears.IsProjectileBehindPlayer(playerPos, proj)
   local velocity = proj.Velocity:Normalized()
 
   -- 0 = side, 1 = back, -1 = front
-  return velocity:Dot(toProj) > 0.1
+  return velocity:Dot(toProj) > 0
 end
 
 --- @param player EntityPlayer

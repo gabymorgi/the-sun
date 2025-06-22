@@ -16,7 +16,7 @@ local WallFire = include("thesun-src.WallFire")
 ---@type PlayerUtils
 local PlayerUtils = include("thesun-src.PlayerUtils")
 
-local theSunMod = RegisterMod("The Sun Character Mod", 1)
+local theSunMod = RegisterMod("The Orbits of Asterogues", 1)
 
 local playerInRoomMultiplier = {1, 0.75, 0.66, 0.6}
 local roomMultiplier = {
@@ -180,7 +180,9 @@ function theSunMod:OnPeffectUpdate(player)
 
   local frameCount = Const.game:GetFrameCount()
   local room = Const.game:GetRoom()
-  if not room:IsClear() then
+  -- GetAliveBossesCount()
+  -- GetAliveEnemiesCount()
+  if not room:IsClear() or Isaac.CountEnemies() > 0 then
     local playerData = PlayerUtils.GetPlayerData(player)
     if player.FireDelay <= 0 then
       if player:HasCollectible(CollectibleType.COLLECTIBLE_KIDNEY_STONE) then
@@ -255,6 +257,21 @@ function theSunMod:OnPeffectUpdate(player)
   OrbitingTears.UpdateOrbitingTears(player)
   if frameCount % 32 == 0 then -- once every second
     PlayerUtils.CachePlayerCollectibles(player)
+  end
+  if Input.IsActionPressed(ButtonAction.ACTION_DROP, player.ControllerIndex) then
+    OrbitingTears.DropRelease(player)
+  end
+  if frameCount % 8 == 0 then -- orbit damage
+    local currentFloor = Game():GetLevel():GetAbsoluteStage()
+
+    for _, enemy in ipairs(Utils.GetEnemiesInRange(player.Position, Const.AbsorbRange)) do
+      if enemy:IsVulnerableEnemy() and not enemy:IsDead() then
+        local dist = player.Position:DistanceSquared(enemy.Position)
+        local t = 1 - math.min(dist / Const.AbsorbRangeSquared, 1) -- 1 cerca, 0 en el borde
+        local dmg = 0.4 + t * (3.9 + 0.3 * currentFloor - 0.4)
+        enemy:TakeDamage(dmg, DamageFlag.DAMAGE_FAKE, EntityRef(player), 0)
+      end
+    end
   end
 end
 theSunMod:AddCallback(ModCallbacks.MC_POST_PEFFECT_UPDATE, theSunMod.OnPeffectUpdate)
