@@ -9,7 +9,7 @@ function log.Flag(bitSet)
   local function extractBits(number, offset)
     for i = 0, 63 do
       if number & (1 << i) ~= 0 then
-        table.insert(result, i + 1 + offset)
+        table.insert(result, i + offset)
       end
     end
   end

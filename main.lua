@@ -139,6 +139,9 @@ function theSunMod:OnBombCollision(bomb, collider)
     local bombHash = GetPtrHash(bomb)
     if playerData.tearOrbit.list[bombHash] then
       playerData.tearOrbit:remove(bombHash)
+      if bomb.FrameCount < 240 then
+        bomb:SetExplosionCountdown(15)
+      end
     end
   end
 end
@@ -147,6 +150,7 @@ theSunMod:AddCallback(ModCallbacks.MC_PRE_BOMB_COLLISION, theSunMod.OnBombCollis
 ---@param tear EntityTear
 ---@param collider Entity
 function theSunMod:OnTearCollision(tear, collider)
+  if not tear.SpawnerEntity then return end
   local player = tear.SpawnerEntity:ToPlayer()
   if not player or not Utils.HasOrbit(player) then
     return
@@ -164,15 +168,30 @@ function theSunMod:OnTearCollision(tear, collider)
   if collider:IsActiveEnemy() and collider:IsVulnerableEnemy() then
     local isPiercing = tear:HasTearFlags(TearFlags.TEAR_PIERCING)
     -- sticky: explosivo - sinus infection - mucormycosis
-    local isSticky = tear:HasTearFlags(TearFlags.TEAR_STICKY | TearFlags.TEAR_BOOGER | TearFlags.TEAR_SPORE)
-    if not isPiercing or isSticky then
-      if tear:HasTearFlags(TearFlags.TEAR_BOUNCE) then
-        playerData.tearOrbit:remove(tearHash)
-      end
+    -- local isSticky = tear:HasTearFlags(TearFlags.TEAR_STICKY | TearFlags.TEAR_BOOGER | TearFlags.TEAR_SPORE)
+    if tear:HasTearFlags(TearFlags.TEAR_PIERCING) or tear:HasTearFlags(TearFlags.TEAR_BOUNCE) then
+      playerData.tearOrbit:remove(tearHash)
     end
   end
 end
 theSunMod:AddCallback(ModCallbacks.MC_PRE_TEAR_COLLISION, theSunMod.OnTearCollision)
+
+---@param projectile EntityProjectile
+---@param collider Entity
+function theSunMod:OnProjectileCollision(projectile, collider)
+  for _, p in pairs(Utils.GetPlayers()) do
+    local playerData = PlayerUtils.GetPlayerData(p)
+    if playerData.projOrbit.list[GetPtrHash(projectile)] then
+      if collider:IsActiveEnemy() and collider:IsVulnerableEnemy() then
+        playerData.projOrbit:remove(GetPtrHash(projectile))
+      end
+      return
+    end
+  end
+end
+theSunMod:AddCallback(ModCallbacks.MC_PRE_PROJECTILE_COLLISION, theSunMod.OnProjectileCollision)
+
+
 
 ---@param player EntityPlayer
 function theSunMod:OnPeffectUpdate(player)

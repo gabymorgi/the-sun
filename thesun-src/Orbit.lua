@@ -8,7 +8,8 @@ local flagsToTransfer = {
   "TEAR_SQUARE",
   "TEAR_WIGGLE",
   "TEAR_SPIRAL",
-  "TEAR_BIG_SPIRAL"
+  "TEAR_BIG_SPIRAL",
+  "TEAR_SHRINK"
 }
 
 ---@class Orbital<T>: { entity: T }
@@ -47,8 +48,14 @@ end
 ---@param orbital EntityOrbital
 ---@param tearLifetime? number
 function Orbit:add(player, orbital, tearLifetime)
-  local lifeTime = Utils.IsPluto(player) and math.maxinteger or
-    Game():GetFrameCount() + (tearLifetime or player.TearRange / 2)
+  local lifeTime
+  if tearLifetime then
+    lifeTime = Game():GetFrameCount() + tearLifetime
+  elseif Utils.IsTheSun(player) then
+    lifeTime = math.maxinteger
+  else
+    lifeTime = player.TearRange
+  end
   local orbitalHash = GetPtrHash(orbital)
   if self.list[orbitalHash] then return self.list[orbitalHash] end
   self.list[orbitalHash] = {
@@ -130,9 +137,9 @@ function TearOrbit:remove(hash)
       tear:ClearTearFlags(TearFlags.TEAR_SPECTRAL)
       tear.Velocity = tear.Velocity:Rotated(-90)
     elseif tear:HasTearFlags(TearFlags.TEAR_HYDROBOUNCE) then
-      tear.FallingAcceleration = 3
+      tear.FallingAcceleration = 1
     else
-      tear.FallingAcceleration = 0
+      tear.FallingAcceleration = -0.08
     end
   end
   Orbit.remove(self, hash)
@@ -154,7 +161,12 @@ end
 ---@return EntityProjectile
 ---@diagnostic disable-next-line: duplicate-set-field
 function ProjectileOrbit:add(player, orbital)
-  orbital:AddProjectileFlags(ProjectileFlags.HIT_ENEMIES | ProjectileFlags.CANT_HIT_PLAYER | ProjectileFlags.GHOST)
+  orbital:AddProjectileFlags(
+    ProjectileFlags.HIT_ENEMIES |
+    ProjectileFlags.CANT_HIT_PLAYER |
+    ProjectileFlags.GHOST |
+    ProjectileFlags.ANY_HEIGHT_ENTITY_HIT
+  )
   orbital.FallingAccel = -0.1
   orbital.FallingSpeed = 0
   return Orbit.add(self, player, orbital)

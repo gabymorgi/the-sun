@@ -599,18 +599,18 @@ function WormEffects.GetModifiedOrbit(orb)
     end
   end
   if (orb.flags & Const.CustomFlags.TEAR_SQUARE ~= 0) then
-    radius = radius + hookWormSteps[orb.entity.FrameCount % 16]
+    radius = radius + hookWormSteps[orb.entity.FrameCount % #hookWormSteps]
   end
   if (orb.flags & Const.CustomFlags.TEAR_WIGGLE ~= 0) then
-    radius = radius + wiggleWormSteps[orb.entity.FrameCount % 15]
+    radius = radius + wiggleWormSteps[orb.entity.FrameCount % #wiggleWormSteps]
   end
   if (orb.flags & Const.CustomFlags.TEAR_SPIRAL) ~= 0 then
-    local offset = ringWormSteps[orb.entity.FrameCount % 10]
+    local offset = ringWormSteps[orb.entity.FrameCount % #ringWormSteps]
     angle = angle + offset.a
     radius = radius + offset.r
   end
   if (orb.flags & Const.CustomFlags.TEAR_BIG_SPIRAL ~= 0) then
-    local offset = ouroborosWormSteps[orb.entity.FrameCount % 120]
+    local offset = ouroborosWormSteps[orb.entity.FrameCount % #ouroborosWormSteps]
     angle = angle + offset.a
     radius = radius + offset.r
   end

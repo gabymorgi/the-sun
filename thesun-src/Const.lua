@@ -30,6 +30,7 @@ Const.CustomFlags = {
   TEAR_WIGGLE = 1 << 1,
   TEAR_SPIRAL = 1 << 2,
   TEAR_BIG_SPIRAL = 1 << 3,
+  TEAR_SHRINK = 1 << 4,
 }
 
 return Const

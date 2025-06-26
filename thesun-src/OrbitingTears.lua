@@ -14,8 +14,6 @@ local WormEffects = include("thesun-src.WormEffects")
 ---@field DropRelease fun(player: EntityPlayer)
 ---@field VengefulRelease fun(player: EntityPlayer)
 ---@field ReleaseHomingTears fun(player: EntityPlayer)
----@field ExpandHomingTears fun(player: EntityPlayer, releaseOrbit: boolean?)
----@field ExpandOrbitingTears fun(player: EntityPlayer, entityOrbit: Orbit<EntityOrbital>)
 ---@field ExplodeOrbitingTears fun(player: EntityPlayer, entityOrbit: Orbit<EntityOrbital>)
 ---@field SpinOrbitingTears fun(player: EntityPlayer, entityOrbit: Orbit<EntityOrbital>)
 ---@field PurgeOrbitingEntities fun(entityOrbit: Orbit<EntityOrbital>, gameFrameCount: number)
@@ -143,69 +141,100 @@ function OrbitingTears.ReleaseHomingTears(player)
 end
 
 --- @param player EntityPlayer
---- @param releaseOrbit boolean?
-function OrbitingTears.ExpandHomingTears(player, releaseOrbit)
-  ---@type PlayerData
-  local playerData = PlayerUtils.GetPlayerData(player)
-  local enemies
-  local step = player.ShotSpeed * Const.RADIUS_STEP_MULTIPLIER * 2
-  local epsilon = 0.5
-  for hash, orb in pairs(playerData.tearOrbit.list) do
-    local closestEnemy = nil
-    local closestEnemyDist = math.huge
-    if not orb.target or not orb.target:Exists() then
-      if not enemies then
-        enemies = Utils.GetEnemiesInRange(player.Position, playerData.orbitRange.max)
-      end
-      for _, enemy in pairs(enemies) do
-        local dist = enemy.Position:DistanceSquared(orb.entity.Position)
-        if dist < closestEnemyDist then
-          closestEnemy = enemy
-          closestEnemyDist = dist
-        end
-      end
-      orb.target = closestEnemy
-    else
-      closestEnemy = orb.target
-    end
-    local targetRadius = playerData.orbitRange.act
-    if orb.target then
-      if releaseOrbit then
-        orb.entity.Velocity = (orb.target.Position - orb.entity.Position):Normalized() * player.ShotSpeed
-        playerData.tearOrbit:remove(hash)
-      else
-        local clockWiseSign = Utils.GetClockwiseSign2(player.Position, orb.entity.Position, orb.target.Position)
-        orb.direction = orb.direction + clockWiseSign * 0.1
-        targetRadius = math.min(orb.target.Position:Distance(player.Position), playerData.orbitRange.max)
-      end
-    end
-    local diff = targetRadius - orb.radius
-    if math.abs(diff) < epsilon then
-      orb.radius = targetRadius
-    elseif diff > 0 then
-      orb.radius = math.min(orb.radius + step, targetRadius)
-    else
-      orb.radius = math.max(orb.radius - step, targetRadius)
-    end
-  end
-end
-
---- @param player EntityPlayer
---- @param entityOrbit Orbit<EntityOrbital>
-function OrbitingTears.ExpandOrbitingTears(player, entityOrbit)
+--- @param entityOrbit Orbit<Entity>
+function OrbitingTears.SpinOrbitingTears(player, entityOrbit)
   local playerData = PlayerUtils.GetPlayerData(player)
   local step = player.ShotSpeed * Const.RADIUS_STEP_MULTIPLIER
-  local target = playerData.orbitRange.act
   local epsilon = 0.5
-  for _, orb in pairs(entityOrbit.list) do
-    local diff = target - orb.radius
-    if math.abs(diff) < epsilon then
-      orb.radius = target
-    elseif diff > 0 then
-      orb.radius = math.min(orb.radius + step, target)
-    else
-      orb.radius = math.max(orb.radius - step, target)
+  local orbitRange = playerData.orbitRange
+  local enemies
+  local reductionStepScale = 2.5 / player.TearRange
+  local reductionStepDamage = 20 / player.TearRange
+
+  for hash, orb in pairs(entityOrbit.list) do
+    local entity = orb.entity
+    local tear = entity:ToTear()
+    local hasHoming = false
+
+    if tear then
+      hasHoming = tear:HasTearFlags(TearFlags.TEAR_HOMING)
+      if (orb.flags & Const.CustomFlags.TEAR_SHRINK ~= 0) then
+        log.Value("Shrinking tear", {
+          scale = tear.Scale,
+          damage = tear.CollisionDamage,
+          range = player.TearRange
+        })
+        tear.Scale = tear.Scale - reductionStepScale
+        tear.CollisionDamage = tear.CollisionDamage - reductionStepDamage
+        if tear.CollisionDamage < 0.1 then
+          playerData.tearOrbit:remove(hash)
+        end
+      end
     end
+
+    -- Lógica HOMING
+    if hasHoming then
+      local closestEnemy = orb.target
+      local closestDist = math.huge
+
+      if not (closestEnemy and closestEnemy:Exists()) then
+        if not enemies then
+          enemies = Utils.GetEnemiesInRange(player.Position, orbitRange.max)
+        end
+        for _, enemy in pairs(enemies) do
+          local dist = enemy.Position:DistanceSquared(entity.Position)
+          if dist < closestDist then
+            closestEnemy = enemy
+            closestDist = dist
+          end
+        end
+        orb.target = closestEnemy
+      end
+
+      if closestEnemy then
+        -- Ajustar dirección y radio hacia el enemigo
+        local distToEnemy = closestEnemy.Position:Distance(player.Position)
+        local clockWiseSign = Utils.GetClockwiseSign2(player.Position, entity.Position, closestEnemy.Position)
+        orb.direction = Utils.Clamp(orb.direction + clockWiseSign * 0.1, -1.5, 1.5)
+        local targetRadius = math.min(distToEnemy, orbitRange.max)
+
+        -- Interpolación de radio
+        local diff = targetRadius - orb.radius
+        if math.abs(diff) < epsilon then
+          orb.radius = targetRadius
+        elseif diff > 0 then
+          orb.radius = math.min(orb.radius + step * 2, targetRadius)
+        else
+          orb.radius = math.max(orb.radius - step * 2, targetRadius)
+        end
+      end
+    else
+      -- Lógica NORMAL (mantiene la órbita activa)
+      local diff = orbitRange.act - orb.radius
+      if math.abs(diff) < epsilon then
+        orb.radius = orbitRange.act
+      elseif diff > 0 then
+        orb.radius = math.min(orb.radius + step, orbitRange.act)
+      else
+        orb.radius = math.max(orb.radius - step, orbitRange.act)
+      end
+    end
+
+
+    local vel = player.ShotSpeed * Utils.FastInvSqrt(orb.radius)
+    orb.angle = orb.angle + orb.direction * vel
+    local angle, radius = orb.angle, orb.radius
+    if tear then
+      angle, radius = WormEffects.GetModifiedOrbit(orb)
+    end
+    local offset
+    if playerData.cacheCollectibles[CollectibleType.COLLECTIBLE_TRACTOR_BEAM] then
+      offset = Utils.GetFlattenedOrbitPosition(player, angle, radius)
+    else
+      offset = Vector(math.cos(angle), math.sin(angle)) * radius
+    end
+    local targetPos = player.Position + offset
+    orb.entity.Velocity = (targetPos - orb.entity.Position) * 0.5
   end
 end
 
@@ -224,29 +253,6 @@ function OrbitingTears.ExplodeOrbitingTears(player, entityOrbit)
       explosion:SetExplosionCountdown(0)
     end
     orb.entity:Remove()
-  end
-end
-
---- @param player EntityPlayer
---- @param entityOrbit Orbit<Entity>
---- @param checkWorm boolean?
-function OrbitingTears.SpinOrbitingTears(player, entityOrbit, checkWorm)
-  local playerData = PlayerUtils.GetPlayerData(player)
-  for _, orb in pairs(entityOrbit.list) do
-    local vel = player.ShotSpeed * Utils.FastInvSqrt(orb.radius)
-    orb.angle = orb.angle + orb.direction * vel
-    local angle, radius = orb.angle, orb.radius
-    if checkWorm then
-      angle, radius = WormEffects.GetModifiedOrbit(orb)
-    end
-    local offset
-    if playerData.cacheCollectibles[CollectibleType.COLLECTIBLE_TRACTOR_BEAM] then
-      offset = Utils.GetFlattenedOrbitPosition(player, angle, radius)
-    else
-      offset = Vector(math.cos(angle), math.sin(angle)) * radius
-    end
-    local targetPos = player.Position + offset
-    orb.entity.Velocity = (targetPos - orb.entity.Position) * 0.5
   end
 end
 
@@ -338,15 +344,6 @@ function OrbitingTears.CalculatePostTearSynergies(player, tear, orb)
     end
   end
 
-  if player:HasCollectible(CollectibleType.COLLECTIBLE_AKELDAMA) then
-    local akeldamaTear = player:FireTear(player.Position, tear.Velocity, false, true, false)
-    akeldamaTear.TearFlags = TearFlags.TEAR_CHAIN | TearFlags.TEAR_SPECTRAL
-    akeldamaTear.CollisionDamage = 3.5
-    akeldamaTear.Size = 7
-    akeldamaTear.Scale = 1
-    akeldamaTear:ChangeVariant(TearVariant.BLOOD)
-  end
-
   if player:HasCollectible(CollectibleType.COLLECTIBLE_IMMACULATE_HEART) then
     if Const.rng:RandomFloat() < 0.2 then
       local immaculateTear = player:FireTear(player.Position, tear.Velocity, false)
@@ -408,10 +405,6 @@ function OrbitingTears.CalculatePostTearSynergies(player, tear, orb)
     if (player:HasCollectible(CollectibleType.COLLECTIBLE_POP)) then
       orb.direction = orb.direction * 0.5
     end
-
-    if player:HasCollectible(CollectibleType.COLLECTIBLE_PROPTOSIS) then
-      orb.direction = orb.direction * 2
-    end
   end
 end
 
@@ -445,6 +438,8 @@ function OrbitingTears.TryAbsorbTears(player)
           table.insert(playerData.ludodivo.ExpFrames, Const.game:GetFrameCount() + player.TearRange)
         elseif player:HasCollectible(CollectibleType.COLLECTIBLE_DR_FETUS) then
           tear = player:FireBomb(proj.Position, proj.Velocity, player)
+          tear.RadiusMultiplier = 0.7
+          tear:SetExplosionCountdown(300)
         elseif (
           player:HasCollectible(CollectibleType.COLLECTIBLE_TECH_X) or
           player:HasCollectible(CollectibleType.COLLECTIBLE_BRIMSTONE) or
@@ -463,7 +458,7 @@ function OrbitingTears.TryAbsorbTears(player)
             techEffect.Size = 5
             techEffect.CollisionDamage = player.Damage * 0.5
             techEffect:Update()
-            playerData.effectOrbit:add(player, techEffect)
+            playerData.effectOrbit:add(player, techEffect, 300)
             OrbitingTears.CalculatePostTearSynergies(player, techEffect --[[@as EntityTear]])
           end
         elseif player:HasCollectible(CollectibleType.COLLECTIBLE_MOMS_KNIFE) then
@@ -524,7 +519,7 @@ function OrbitingTears.TryAbsorbTears(player)
         end
       elseif not playerData.projOrbit.list[projHash] then
         proj:GetData().theSunIsAbsorbed = true
-        if not proj:HasProjectileFlags(ProjectileFlags.HIT_ENEMIES) and playerData.projOrbit:hasSpace() then
+        if playerData.projOrbit:hasSpace() then
           playerData.projOrbit:add(player, proj)
         end
       end
@@ -604,7 +599,7 @@ function OrbitingTears.TryAbsorbEntities(player)
               techEffect.Size = 10
               techEffect.CollisionDamage = player.Damage
               techEffect:Update()
-              PlayerUtils.GetPlayerData(player).effectOrbit:add(player, techEffect)
+              PlayerUtils.GetPlayerData(player).effectOrbit:add(player, techEffect, 300)
             end
             goto continue
           end
@@ -733,20 +728,10 @@ function OrbitingTears.UpdateOrbitingTears(player)
       end
     end
   else
-    if (
-      player:HasCollectible(CollectibleType.COLLECTIBLE_SPOON_BENDER) or
-      player:HasCollectible(CollectibleType.COLLECTIBLE_SACRED_HEART) or
-      player:HasCollectible(CollectibleType.COLLECTIBLE_BIRTHRIGHT) or
-      player:HasCollectible(CollectibleType.COLLECTIBLE_GODHEAD)
-    ) then
-      OrbitingTears.ExpandHomingTears(player)
-    else
-      if player:HasTrinket(TrinketType.TRINKET_BRAIN_WORM) and gameFrameCount % 8 == 0 then
-        OrbitingTears.ReleaseHomingTears(player)
-      end
-      OrbitingTears.ExpandOrbitingTears(player, playerData.tearOrbit)
+    if player:HasTrinket(TrinketType.TRINKET_BRAIN_WORM) and gameFrameCount % 8 == 0 then
+      OrbitingTears.ReleaseHomingTears(player)
     end
-    OrbitingTears.SpinOrbitingTears(player, playerData.tearOrbit, true)
+    OrbitingTears.SpinOrbitingTears(player, playerData.tearOrbit)
     local hasPop = player:HasCollectible(CollectibleType.COLLECTIBLE_POP)
     if (hasPop and gameFrameCount % 4 == 0) then -- artificial delay for the pop effect
       OrbitingTears.CheckOrbitingTearCollisions(playerData.tearOrbit, playerData.orbitRange.act)
@@ -759,7 +744,6 @@ function OrbitingTears.UpdateOrbitingEntities(player)
   local gameFrameCount = Const.game:GetFrameCount()
   local playerData = PlayerUtils.GetPlayerData(player)
   OrbitingTears.PurgeOrbitingEntities(playerData.projOrbit, gameFrameCount)
-  OrbitingTears.ExpandOrbitingTears(player, playerData.projOrbit)
   OrbitingTears.SpinOrbitingTears(player, playerData.projOrbit)
   for hash, orb in pairs(playerData.effectOrbit.list) do
     if (orb.entity.Type == EntityType.ENTITY_TEAR) then --knives
@@ -780,8 +764,6 @@ function OrbitingTears.UpdateOrbitingEntities(player)
       end
     end
   end
-  
-  OrbitingTears.ExpandOrbitingTears(player, playerData.effectOrbit)
   OrbitingTears.SpinOrbitingTears(player, playerData.effectOrbit)
 end
 

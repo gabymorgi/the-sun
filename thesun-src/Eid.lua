@@ -31,7 +31,7 @@ if EID then
     ["5.100." .. CollectibleType.COLLECTIBLE_CHEMICAL_PEEL] = "Bonus applies to clockwise-absorbed projectiles.",
     ["5.100." .. CollectibleType.COLLECTIBLE_BLOOD_CLOT] = "Bonus applies to clockwise-absorbed projectiles.",
     ["5.100." .. CollectibleType.COLLECTIBLE_EPIC_FETUS] = "All orbiting tears explode when firing.",
-    ["5.100." .. CollectibleType.COLLECTIBLE_DR_FETUS] = "Minimum orbit radius increased.",
+    ["5.100." .. CollectibleType.COLLECTIBLE_DR_FETUS] = "Minimum orbit radius increased.#explosion countdown increased significantly.#bomb explode 1 sec after hitting an enemy",
     ["5.100." .. CollectibleType.COLLECTIBLE_CHOCOLATE_MILK] = "More orbiting tears = less damage.",
     ["5.100." .. CollectibleType.COLLECTIBLE_CURSED_EYE] = "Teleports when 1-4 orbiting tears.",
     ["5.100." .. CollectibleType.COLLECTIBLE_LUDOVICO_TECHNIQUE] = "Each absorbed tear briefly boosts damage.",
@@ -39,6 +39,7 @@ if EID then
     ["5.100." .. CollectibleType.COLLECTIBLE_SPIRIT_SWORD] = "x3 damage multiplier.",
     ["5.100." .. CollectibleType.COLLECTIBLE_THE_WIZ] = "Affects wall projectiles.",
     ["5.100." .. CollectibleType.COLLECTIBLE_TRACTOR_BEAM] = "Flatten orbit.",
+    ["5.100." .. CollectibleType.COLLECTIBLE_PROPTOSIS] = "Damage is reduced at a much slower pace",
     -- trinkets
     ["5.350." .. TrinketType.TRINKET_BRAIN_WORM] = "tears released towards nearby enemies.",
   }
