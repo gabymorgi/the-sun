@@ -42,10 +42,12 @@ function theSunMod:PlayerInit(player)
   local cachePlayer = false
   if Utils.IsTheSun(player) then
     player:AddNullCostume(Const.HairCostume)
+    player:AddTrinket(TrinketType.TRINKET_FRIENDSHIP_NECKLACE, true)
     cachePlayer = true
   elseif Utils.IsPluto(player) then
     player.SizeMulti = Vector(0.5, 0.5)
     player:ClearCostumes()
+    player:AddTrinket(TrinketType.TRINKET_FRIENDSHIP_NECKLACE, true)
     cachePlayer = true
   end
 
@@ -65,7 +67,8 @@ theSunMod:AddCallback(ModCallbacks.MC_POST_PLAYER_INIT, theSunMod.PlayerInit)
 ---@param player EntityPlayer
 function theSunMod:onEvaluateCacheRange(player)
   if not Utils.IsTheSun(player) then return end
-  PlayerUtils.GetPlayerData(player).orbitRange.max = player.TearRange / 3
+  log.Value("Evaluating range for player", player.TearRange)
+  PlayerUtils.GetPlayerData(player).orbitRange.max = Utils.FastInvSqrt(player.TearRange)
 end
 theSunMod:AddCallback(ModCallbacks.MC_EVALUATE_CACHE, theSunMod.onEvaluateCacheRange, CacheFlag.CACHE_RANGE)
 

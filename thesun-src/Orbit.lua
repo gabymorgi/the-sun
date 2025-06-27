@@ -98,7 +98,8 @@ end
 ---@return EntityTear
 ---@diagnostic disable-next-line: duplicate-set-field
 function TearOrbit:add(player, orbital)
-  local orb = Orbit.add(self, player, orbital)
+  local tearLifeTime = orbital.Type == EntityType.ENTITY_LASER and player.TearRange or nil
+  local orb = Orbit.add(self, player, orbital, tearLifeTime)
   orbital:AddTearFlags(TearFlags.TEAR_SPECTRAL)
   if (orbital.Type == EntityType.ENTITY_TEAR) then
     -- worm flags modifies unexpectedly the tear

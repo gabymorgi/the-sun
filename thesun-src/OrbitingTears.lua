@@ -195,17 +195,19 @@ function OrbitingTears.SpinOrbitingTears(player, entityOrbit)
         -- Ajustar dirección y radio hacia el enemigo
         local distToEnemy = closestEnemy.Position:Distance(player.Position)
         local clockWiseSign = Utils.GetClockwiseSign2(player.Position, entity.Position, closestEnemy.Position)
-        orb.direction = Utils.Clamp(orb.direction + clockWiseSign * 0.1, -1.5, 1.5)
+        local homingFactor = Utils.Clamp(1 / (distToEnemy / 40 + 1), 0.05, 1.0)
+        orb.direction = Utils.Clamp(orb.direction + clockWiseSign * 0.1 * homingFactor, -1.5, 1.5)
         local targetRadius = math.min(distToEnemy, orbitRange.max)
 
         -- Interpolación de radio
         local diff = targetRadius - orb.radius
+        local radiusAdjustSpeed = step * 2 -- * homingFactor
         if math.abs(diff) < epsilon then
           orb.radius = targetRadius
         elseif diff > 0 then
-          orb.radius = math.min(orb.radius + step * 2, targetRadius)
+          orb.radius = math.min(orb.radius + radiusAdjustSpeed, targetRadius)
         else
-          orb.radius = math.max(orb.radius - step * 2, targetRadius)
+          orb.radius = math.max(orb.radius - radiusAdjustSpeed, targetRadius)
         end
       end
     else
@@ -479,6 +481,11 @@ function OrbitingTears.TryAbsorbTears(player)
           OrbitingTears.CalculatePostTearSynergies(player, fakeKnife, orb)
         else
           tear = player:FireTear(proj.Position, proj.Velocity, true, true, true, player, multiplier)
+          log.Value("Absorbing tear", {
+            damage = tear.CollisionDamage,
+            scale = tear.Scale,
+            size = tear.Size,
+          })
           if player:HasCollectible(CollectibleType.COLLECTIBLE_SPIRIT_SWORD) then
             tear:ChangeVariant(TearVariant.SWORD_BEAM)
           end
