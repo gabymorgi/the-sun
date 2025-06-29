@@ -43,11 +43,13 @@ function theSunMod:PlayerInit(player)
   if Utils.IsTheSun(player) then
     player:AddNullCostume(Const.HairCostume)
     player:AddTrinket(TrinketType.TRINKET_FRIENDSHIP_NECKLACE, true)
+    player:UsePill(PillEffect.PILLEFFECT_GULP, 0)
     cachePlayer = true
   elseif Utils.IsPluto(player) then
     player.SizeMulti = Vector(0.5, 0.5)
     player:ClearCostumes()
     player:AddTrinket(TrinketType.TRINKET_FRIENDSHIP_NECKLACE, true)
+    player:UsePill(PillEffect.PILLEFFECT_GULP, 0)
     cachePlayer = true
   end
 

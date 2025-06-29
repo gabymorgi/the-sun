@@ -1,3 +1,4 @@
+local log = include("log")
 ---@type Store
 local Store = require("thesun-src.Store")
 ---@type Const
@@ -102,6 +103,10 @@ function WallFire.SpawnBulletWall(player, spawnPos, velocity)
   proj.FallingAccel = -0.1
   proj.FallingSpeed = 0
   proj.Scale = 0.25
+  if player:HasCollectible(CollectibleType.COLLECTIBLE_SOY_MILK) or player:HasCollectible(CollectibleType.COLLECTIBLE_ALMOND_MILK) then
+    proj.Scale = 0.1
+    proj.Size = 2
+  end
 end
 
 ---@param player EntityPlayer

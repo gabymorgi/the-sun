@@ -57,7 +57,7 @@ function Orbit:add(player, orbital, tearLifetime)
   elseif Utils.IsTheSun(player) then
     lifeTime = math.maxinteger
   else
-    lifeTime = player.TearRange
+    lifeTime = Game():GetFrameCount() + player.TearRange
   end
   local orbitalHash = GetPtrHash(orbital)
   if self.list[orbitalHash] then return self.list[orbitalHash] end
