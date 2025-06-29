@@ -31,6 +31,8 @@ Const.CustomFlags = {
   TEAR_SPIRAL = 1 << 2,
   TEAR_BIG_SPIRAL = 1 << 3,
   TEAR_SHRINK = 1 << 4,
+  TEAR_LUDOVICO = 1 << 5,
+  TEAR_KNIFE = 1 << 6,
 }
 
 return Const

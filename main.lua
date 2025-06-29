@@ -67,8 +67,7 @@ theSunMod:AddCallback(ModCallbacks.MC_POST_PLAYER_INIT, theSunMod.PlayerInit)
 ---@param player EntityPlayer
 function theSunMod:onEvaluateCacheRange(player)
   if not Utils.IsTheSun(player) then return end
-  log.Value("Evaluating range for player", player.TearRange)
-  PlayerUtils.GetPlayerData(player).orbitRange.max = Utils.FastInvSqrt(player.TearRange)
+  PlayerUtils.GetPlayerData(player).orbitRange.max = player.TearRange / 3
 end
 theSunMod:AddCallback(ModCallbacks.MC_EVALUATE_CACHE, theSunMod.onEvaluateCacheRange, CacheFlag.CACHE_RANGE)
 
@@ -169,10 +168,10 @@ function theSunMod:OnTearCollision(tear, collider)
     return
   end
   if collider:IsActiveEnemy() and collider:IsVulnerableEnemy() then
-    local isPiercing = tear:HasTearFlags(TearFlags.TEAR_PIERCING)
+    -- local isPiercing = tear:HasTearFlags(TearFlags.TEAR_PIERCING)
     -- sticky: explosivo - sinus infection - mucormycosis
     -- local isSticky = tear:HasTearFlags(TearFlags.TEAR_STICKY | TearFlags.TEAR_BOOGER | TearFlags.TEAR_SPORE)
-    if tear:HasTearFlags(TearFlags.TEAR_PIERCING) or tear:HasTearFlags(TearFlags.TEAR_BOUNCE) then
+    if tear:HasTearFlags(TearFlags.TEAR_BOUNCE) then
       playerData.tearOrbit:remove(tearHash)
     end
   end
@@ -202,8 +201,6 @@ function theSunMod:OnPeffectUpdate(player)
 
   local frameCount = Const.game:GetFrameCount()
   local room = Const.game:GetRoom()
-  -- GetAliveBossesCount()
-  -- GetAliveEnemiesCount()
   if not room:IsClear() or Isaac.CountEnemies() > 0 then
     local playerData = PlayerUtils.GetPlayerData(player)
     if player.FireDelay <= 0 then
@@ -378,20 +375,20 @@ theSunMod:AddCallback(ModCallbacks.MC_POST_PLAYER_RENDER, function(_, player)
   if Game():IsPaused() then return end
 
   local activeBars = PlayerUtils.GetPlayerData(player).activeBars
-  local keys = {}          -- para mantener un orden estable
+  local keys = {}
   for k in pairs(activeBars) do table.insert(keys, k) end
   table.sort(keys)
 
   local n = #keys
   for i, id in ipairs(keys) do
-    if i > 8 then break end                        -- seguridad; nunca más de 8
-    local angle = (i - 1) * 45                    -- 0°, 45°, 90°…
+    if i > 8 then break end
+    local angle = (i - 1) * 45
     local offset = Vector.FromAngle(angle):Resized(RADIUS)
     local scrPos = Isaac.WorldToScreen(player.Position + offset)
 
     local bar = activeBars[id]
-    local charging = bar.charge > 0           -- lógica de ejemplo
-    
+    local charging = bar.charge > 0
+
     bar:render(scrPos, charging)
   end
 end)
@@ -402,6 +399,27 @@ end)
 ---@param source EntityRef
 ---@param countdownFrames integer
 function theSunMod:OnTakeDamage(entity, amount, flags, source, countdownFrames)
+  if not source or not source.Entity then return end
+  local sourceHash = GetPtrHash(source.Entity)
+  for _, player in pairs(Utils.GetPlayers()) do
+    local playerData = PlayerUtils.GetPlayerData(player)
+    local orb = playerData.tearOrbit.list[sourceHash]
+    if orb and (orb.flags & Const.CustomFlags.TEAR_LUDOVICO ~= 0) then
+      orb.hitCounts = orb.hitCounts + 1
+      if orb.hitCounts > 5 then
+        playerData.tearOrbit:remove(sourceHash)
+      end
+    end
+  end
+end
+theSunMod:AddCallback(ModCallbacks.MC_ENTITY_TAKE_DMG, theSunMod.OnTakeDamage)
+
+---@param entity Entity
+---@param amount number
+---@param flags DamageFlag
+---@param source EntityRef
+---@param countdownFrames integer
+function theSunMod:OnPlayerTakeDamage(entity, amount, flags, source, countdownFrames)
   local player = entity:ToPlayer()
   if not player or not Utils.HasOrbit(player) then return end
 
@@ -416,7 +434,8 @@ function theSunMod:OnTakeDamage(entity, amount, flags, source, countdownFrames)
     end
   end
 end
-theSunMod:AddCallback(ModCallbacks.MC_ENTITY_TAKE_DMG, theSunMod.OnTakeDamage, EntityType.ENTITY_PLAYER)
+
+theSunMod:AddCallback(ModCallbacks.MC_ENTITY_TAKE_DMG, theSunMod.OnPlayerTakeDamage, EntityType.ENTITY_PLAYER)
 
 local color = Color(1, 1, 1, 1, 0, 0, 0, 0, 0, 0)
 local function OnPostUpdate()
@@ -437,10 +456,9 @@ local function OnPostUpdate()
   -- mocked knives control
   for _, player in pairs(players) do
     local playerData = PlayerUtils.GetPlayerData(player)
-    for hash, orb in pairs(playerData.effectOrbit.list) do
-      if (orb.entity.Type == EntityType.ENTITY_TEAR) then --knives
-        local sprite = orb.entity:GetSprite()
-        sprite.Rotation = orb.entity.Velocity:GetAngleDegrees() - 90
+    for _, orb in pairs(playerData.tearOrbit.list) do
+      if (orb.flags & Const.CustomFlags.TEAR_LUDOVICO) ~= 0 then
+        orb.entity:GetSprite().Rotation = orb.entity.Velocity:GetAngleDegrees() - 90
       end
     end
   end
@@ -460,8 +478,6 @@ local function OnPostUpdate()
       Store.releasedTears[hash] = nil
       orb.tear:Remove()
     else
-      local sprite = orb.tear:GetSprite()
-      sprite.Rotation = orb.velocity:GetAngleDegrees() - 90
       orb.tear.Velocity = orb.velocity
     end
   end

@@ -14,7 +14,6 @@
 local ChargeBar = {}
 ChargeBar.__index = ChargeBar
 
--- Crea una nueva barra; por defecto usa la animación de la UI vanilla
 ---@param maxCharge number
 ---@param spritePath string?
 function ChargeBar:new(maxCharge, spritePath)

@@ -3,6 +3,8 @@ local log = include("log")
 local Utils = include("thesun-src.utils")
 ---@type Const
 local Const = include("thesun-src.Const")
+---@type Store
+local Store = require("thesun-src.Store")
 
 local flagsToTransfer = {
   "TEAR_SQUARE",
@@ -18,6 +20,7 @@ local flagsToTransfer = {
 ---@field angle number
 ---@field expirationFrame number
 ---@field flags number
+---@field hitCounts number
 ---@field bounced? boolean
 ---@field target? Entity
 ---@field boomerang? number
@@ -65,6 +68,7 @@ function Orbit:add(player, orbital, tearLifetime)
     angle = Utils.GetAngle(player.Position, orbital.Position),
     expirationFrame = lifeTime,
     flags = 0,
+    hitCounts = 0,
   }
   self.length = self.length + 1
   return self.list[orbitalHash]
@@ -123,10 +127,11 @@ end
 ---@param hash number
 ---@diagnostic disable-next-line: duplicate-set-field
 function TearOrbit:remove(hash)
-  local tear = self.list[hash].entity
+  local orb = self.list[hash]
+  local tear = orb.entity
   -- return worm flags back
   for _, flag in ipairs(flagsToTransfer) do
-    if self.list[hash].flags & Const.CustomFlags[flag] ~= 0 then
+    if orb.flags & Const.CustomFlags[flag] ~= 0 then
       tear:AddTearFlags(TearFlags[flag])
     end
   end
@@ -142,6 +147,14 @@ function TearOrbit:remove(hash)
     else
       tear.FallingAcceleration = -0.08
     end
+  end
+  if orb.flags & Const.CustomFlags.TEAR_LUDOVICO ~= 0 then
+    Store.releasedTears[hash] = {
+      tear = tear --[[@as EntityTear]],
+      velocity = tear.Velocity,
+      expirationFrame = Const.game:GetFrameCount() + 120,
+      turnSprite = orb.flags & Const.CustomFlags.TEAR_KNIFE ~= 0
+    }
   end
   Orbit.remove(self, hash)
 end

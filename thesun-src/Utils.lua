@@ -61,11 +61,10 @@ function Utils.GetClockWiseSign(playerPos, proj)
   end
 end
 
----Calcula el signo para saber si orb debe girar horario o antihorario
----@param center Vector -- centro de la órbita (player.Position)
----@param current Vector -- posición actual de la lágrima (orb.position)
----@param target Vector -- posición del objetivo (orb.target.position)
----@return integer -- 1 si debe girar antihorario, -1 si horario
+---@param center Vector
+---@param current Vector
+---@param target Vector
+---@return number -1 = clockwise, 1 = counter-clockwise
 function Utils.GetClockwiseSign2(center, current, target)
   local v1 = current - center
   local v2 = target - center
@@ -80,7 +79,7 @@ function Utils.GetAngle(pos1, pos2)
   return math.atan(pos2.Y - pos1.Y, pos2.X - pos1.X)
 end
 
--- Devuelve aproximadamente 1 / sqrt(x)
+-- 1 / sqrt(x)
 ---@param x number
 ---@return number
 function Utils.FastInvSqrt(x)
@@ -94,7 +93,6 @@ function Utils.FastInvSqrt(x)
   return y
 end
 
--- Para obtener sqrt(x)
 ---@param x number
 ---@return number
 function Utils.FastSqrt(x)
@@ -203,10 +201,10 @@ function Utils.GetClosestEnemies(position)
 end
 
 ---@param position Vector
----@param direction Vector -- dirección central del cono
----@param radius number -- radio del cono
----@param minAngle number  -- en grados, relativo a la dirección
----@param maxAngle number  -- en grados, relativo a la dirección
+---@param direction Vector
+---@param radius number
+---@param minAngle number -- in degrees
+---@param maxAngle number -- in degrees
 ---@return Entity?
 function Utils.GetClosestEnemiesInCone(position, direction, radius, minAngle, maxAngle)
   local nearestEnemy
@@ -218,7 +216,6 @@ function Utils.GetClosestEnemiesInCone(position, direction, radius, minAngle, ma
       local toEnemy = entity.Position - position
       local angleToEnemy = toEnemy:GetAngleDegrees() - dirAngle
 
-      -- Normalizar ángulo entre -180 y 180
       angleToEnemy = (angleToEnemy + 180) % 360 - 180
 
       if angleToEnemy >= minAngle and angleToEnemy <= maxAngle then
@@ -287,10 +284,10 @@ end
 
 function Utils.GetFlattenedOrbitPosition(player, angle, radius)
   local aim = Utils.GetHeadVector(player) -- :Normalized()
-  local perp = Vector(-aim.Y, aim.X) -- Vector perpendicular al de disparo
+  local perp = Vector(-aim.Y, aim.X)
 
   local x = math.cos(angle) * radius
-  local y = math.sin(angle) * radius * 0.3 -- 1 normal, 0 plano
+  local y = math.sin(angle) * radius * 0.3 -- 1 circular, 0 flat
 
   return aim * x + perp * y
 end
