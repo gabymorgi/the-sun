@@ -33,6 +33,7 @@ Const.CustomFlags = {
   TEAR_SHRINK = 1 << 4,
   TEAR_LUDOVICO = 1 << 5,
   TEAR_KNIFE = 1 << 6,
+  TEAR_TECH = 1 << 7,
 }
 
 return Const

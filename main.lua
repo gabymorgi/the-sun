@@ -50,6 +50,7 @@ function theSunMod:PlayerInit(player)
     player:ClearCostumes()
     player:AddTrinket(TrinketType.TRINKET_FRIENDSHIP_NECKLACE, true)
     player:UsePill(PillEffect.PILLEFFECT_GULP, 0)
+    player:AddCollectible(CollectibleType.COLLECTIBLE_SOUL, 0, false)
     cachePlayer = true
   end
 
@@ -142,7 +143,7 @@ function theSunMod:OnBombCollision(bomb, collider)
     local playerData = PlayerUtils.GetPlayerData(player)
     local bombHash = GetPtrHash(bomb)
     if playerData.tearOrbit.list[bombHash] then
-      playerData.tearOrbit:remove(bombHash)
+      playerData.tearOrbit:remove(bombHash, player)
       if bomb.FrameCount < 240 then
         bomb:SetExplosionCountdown(15)
       end
@@ -174,7 +175,7 @@ function theSunMod:OnTearCollision(tear, collider)
     -- sticky: explosivo - sinus infection - mucormycosis
     -- local isSticky = tear:HasTearFlags(TearFlags.TEAR_STICKY | TearFlags.TEAR_BOOGER | TearFlags.TEAR_SPORE)
     if tear:HasTearFlags(TearFlags.TEAR_BOUNCE) then
-      playerData.tearOrbit:remove(tearHash)
+      playerData.tearOrbit:remove(tearHash, player)
     end
   end
 end
@@ -183,6 +184,22 @@ theSunMod:AddCallback(ModCallbacks.MC_PRE_TEAR_COLLISION, theSunMod.OnTearCollis
 ---@param projectile EntityProjectile
 ---@param collider Entity
 function theSunMod:OnProjectileCollision(projectile, collider)
+  local orbitPlayers = Utils.GetPlayers()
+  if #orbitPlayers == 0 then return end
+  local playerHash
+  if collider then
+    local familiar = collider:ToFamiliar()
+    if familiar and familiar.Variant == FamiliarVariant.PSY_FLY then
+      playerHash = GetPtrHash(familiar.Player)
+    end
+  end
+  for _, p in pairs(Utils.GetPlayers()) do
+    if playerHash == GetPtrHash(p) then
+      OrbitingTears.SpawnTear(p, projectile)
+      return
+    end
+  end
+
   for _, p in pairs(Utils.GetPlayers()) do
     local playerData = PlayerUtils.GetPlayerData(p)
     if playerData.projOrbit.list[GetPtrHash(projectile)] then
@@ -194,8 +211,6 @@ function theSunMod:OnProjectileCollision(projectile, collider)
   end
 end
 theSunMod:AddCallback(ModCallbacks.MC_PRE_PROJECTILE_COLLISION, theSunMod.OnProjectileCollision)
-
-
 
 ---@param player EntityPlayer
 function theSunMod:OnPeffectUpdate(player)
@@ -260,6 +275,11 @@ function theSunMod:OnPeffectUpdate(player)
       else
         bar:add(1)
       end
+    end
+  else
+    for hash, proj in pairs(Store.WallProjectiles) do
+      proj:Die()
+      Store.WallProjectiles[hash] = nil
     end
   end
 
@@ -407,9 +427,16 @@ function theSunMod:OnTakeDamage(entity, amount, flags, source, countdownFrames)
     local playerData = PlayerUtils.GetPlayerData(player)
     local orb = playerData.tearOrbit.list[sourceHash]
     if orb and (orb.flags & Const.CustomFlags.TEAR_LUDOVICO ~= 0) then
-      orb.hitCounts = orb.hitCounts + 1
-      if orb.hitCounts > 5 then
-        playerData.tearOrbit:remove(sourceHash)
+      if (orb.flags & Const.CustomFlags.TEAR_TECH ~= 0) then
+        local angle = (entity.Position - source.Entity.Position):GetAngleDegrees()
+        PlayerUtils.FireLaserFromTear(player, orb, angle)
+        playerData.tearOrbit:remove(sourceHash, player)
+        source.Entity:Remove()
+      else
+        orb.hitCounts = orb.hitCounts + 1
+        if orb.hitCounts > 4 then
+          playerData.tearOrbit:remove(sourceHash, player)
+        end
       end
     end
   end
@@ -459,7 +486,7 @@ local function OnPostUpdate()
   for _, player in pairs(players) do
     local playerData = PlayerUtils.GetPlayerData(player)
     for _, orb in pairs(playerData.tearOrbit.list) do
-      if (orb.flags & Const.CustomFlags.TEAR_LUDOVICO) ~= 0 then
+      if (orb.flags & Const.CustomFlags.TEAR_KNIFE) ~= 0 then
         orb.entity:GetSprite().Rotation = orb.entity.Velocity:GetAngleDegrees() - 90
       end
     end
@@ -481,6 +508,9 @@ local function OnPostUpdate()
       orb.tear:Remove()
     else
       orb.tear.Velocity = orb.velocity
+    end
+    if (orb.turnSprite) then
+      orb.tear:GetSprite().Rotation = orb.tear.Velocity:GetAngleDegrees() - 90
     end
   end
 end

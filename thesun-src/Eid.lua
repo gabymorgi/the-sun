@@ -40,6 +40,8 @@ if EID then
     ["5.100." .. CollectibleType.COLLECTIBLE_THE_WIZ] = "Affects wall projectiles.",
     ["5.100." .. CollectibleType.COLLECTIBLE_TRACTOR_BEAM] = "Flatten orbit.",
     ["5.100." .. CollectibleType.COLLECTIBLE_PROPTOSIS] = "Damage is reduced at a much slower pace",
+    ["5.100." .. CollectibleType.COLLECTIBLE_PSY_FLY] = "blocked projectiles are absorbed into orbit",
+    ["5.100." .. CollectibleType.COLLECTIBLE_SULFUR] = "Do you dare to use it 16 times?",
     -- trinkets
     ["5.350." .. TrinketType.TRINKET_BRAIN_WORM] = "tears released towards nearby enemies.",
   }

@@ -97,7 +97,7 @@ function WallFire.SpawnBulletWall(player, spawnPos, velocity)
   if not proj then return end
   Store.WallProjectiles[GetPtrHash(proj)] = proj
   proj:AddProjectileFlags(ProjectileFlags.GHOST)
-  if Utils.IsTheSun(player) or player:HasCollectible(CollectibleType.COLLECTIBLE_BIRTHRIGHT) then
+  if Utils.IsTheSun(player) or (player:HasCollectible(CollectibleType.COLLECTIBLE_BIRTHRIGHT) and Const.rng:RandomFloat() < 0.5) then
     proj:AddProjectileFlags(ProjectileFlags.CANT_HIT_PLAYER)
   end
   proj.FallingAccel = -0.1
@@ -119,6 +119,9 @@ local function GetWallSpawn(player)
 
   WallFire.PurgeWallProjectiles(topLeftPos, bottomRightPos)
   local gridSize = (bottomRightPos - topLeftPos) / 40
+  -- The Beast room has no standar size
+  gridSize.X = math.floor(gridSize.X)
+  gridSize.Y = math.floor(gridSize.Y)
   local pos, dir
   if wallDirection % 2 == 1 then
     -- Top o Bottom

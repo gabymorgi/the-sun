@@ -24,13 +24,14 @@ local flagsToTransfer = {
 ---@field bounced? boolean
 ---@field target? Entity
 ---@field boomerang? number
+---@field variant? number
 
 ---@alias addOrbital<T> fun(self: any, player: EntityPlayer, orbital: T, tearLifetime: number?): Orbital<T>
 ---@class Orbit<T>: { list: Dict<Orbital<EntityOrbital>>, add: addOrbital<T> }
 ---@field length number
 ---@field limit number
 ---@field new fun(self: any): any
----@field remove fun(self: any, hash: number): nil
+---@field remove fun(self: any, hash: number, player?: EntityPlayer): nil
 ---@field hasSpace fun(self: any): boolean
 ---@field __index any
 
@@ -106,7 +107,7 @@ function TearOrbit:add(player, orbital)
   local orb = Orbit.add(self, player, orbital, tearLifeTime)
   orbital:AddTearFlags(TearFlags.TEAR_SPECTRAL)
   if (orbital.Type == EntityType.ENTITY_TEAR) then
-    -- worm flags modifies unexpectedly the tear
+    -- worm flags modifies unexpectedly the tears
     orbital.Height = -10
     orbital.FallingAcceleration = -0.1
     orbital.FallingSpeed = 0
@@ -125,8 +126,9 @@ function TearOrbit:add(player, orbital)
 end
 
 ---@param hash number
+---@param player EntityPlayer
 ---@diagnostic disable-next-line: duplicate-set-field
-function TearOrbit:remove(hash)
+function TearOrbit:remove(hash, player)
   local orb = self.list[hash]
   local tear = orb.entity
   -- return worm flags back
@@ -149,12 +151,16 @@ function TearOrbit:remove(hash)
     end
   end
   if orb.flags & Const.CustomFlags.TEAR_LUDOVICO ~= 0 then
-    Store.releasedTears[hash] = {
-      tear = tear --[[@as EntityTear]],
-      velocity = tear.Velocity,
-      expirationFrame = Const.game:GetFrameCount() + 120,
-      turnSprite = orb.flags & Const.CustomFlags.TEAR_KNIFE ~= 0
-    }
+    if orb.flags & Const.CustomFlags.TEAR_TECH ~= 0 then
+      orb.entity:Remove()
+    else
+      Store.releasedTears[hash] = {
+        tear = tear --[[@as EntityTear]],
+        velocity = tear.Velocity,
+        expirationFrame = Const.game:GetFrameCount() + 120,
+        turnSprite = orb.flags & Const.CustomFlags.TEAR_KNIFE ~= 0
+      }
+    end
   end
   Orbit.remove(self, hash)
 end

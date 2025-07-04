@@ -1,3 +1,4 @@
+local log = include("log")
 ---@type Store
 local Store = require("thesun-src.Store")
 ---@type Const
@@ -41,6 +42,9 @@ local EffectOrbit = Orbit.EffectOrbit
 ---@field GetPlayerData fun(player: EntityPlayer): PlayerData
 ---@field HandleNewRoom fun(player: EntityPlayer)
 ---@field CachePlayerCollectibles fun(player: EntityPlayer)
+---@field FirePoopTear fun(player: EntityPlayer, pos: Vector, poopVariant: number)
+---@field FireLaserTear fun(player: EntityPlayer, pos: Vector, vel: Vector, laserVariant: number, amount?: number): Orbital<EntityTear>
+---@field FireLaserFromTear fun(player: EntityPlayer, orb: Orbital<EntityOrbital>, angle: number): EntityLaser
 
 local ABSORB_ORBIT_VARIANT = Isaac.GetEntityVariantByName("Absorb orbit")
 
@@ -58,7 +62,7 @@ function PlayerUtils.GetPlayerData(player)
       orbitRange = {
         min = Const.GRID_SIZE,
         max = 90,
-        act = 100,
+        act = Const.GRID_SIZE,
       },
       cacheCollectibles = {},
       activeBars = {},
@@ -193,6 +197,147 @@ function PlayerUtils.CachePlayerCollectibles(player)
     end
   end
   playerData.cacheCollectibles[CollectibleType.COLLECTIBLE_TRACTOR_BEAM] = player:HasCollectible(CollectibleType.COLLECTIBLE_TRACTOR_BEAM)
+end
+
+---@param player EntityPlayer
+---@param pos Vector
+---@param poopVariant number
+function PlayerUtils.FirePoopTear(player, pos, poopVariant)
+  local multiplier = 1
+  if poopVariant > 6 and poopVariant < 11 then
+    multiplier = 4
+  end
+  local tear = player:FireTear(
+    pos,
+    Vector(0, 0),
+    false,
+    true,
+    true,
+    player,
+    multiplier
+  )
+  if not tear then return end
+  if poopVariant == 0 then -- normal poop
+    tear:ChangeVariant(TearVariant.BALLOON_BOMB)
+  elseif poopVariant == 1 then -- red poop
+    tear:ChangeVariant(TearVariant.BLOOD)
+  elseif poopVariant == 2 then -- corny poop
+    tear:ChangeVariant(TearVariant.BALLOON_BOMB)
+    tear:AddTearFlags(TearFlags.TEAR_ECOLI)
+  elseif poopVariant == 3 then -- gold poop
+    tear:ChangeVariant(TearVariant.COIN)
+  elseif poopVariant == 4 then -- rainbow poop
+  tear:ChangeVariant(TearVariant.GODS_FLESH)
+    local rnd = Const.rng:RandomInt(4)
+    if rnd == 0 then
+      tear:AddTearFlags(TearFlags.TEAR_SQUARE)
+    elseif rnd == 1 then
+      tear:AddTearFlags(TearFlags.TEAR_WIGGLE)
+    elseif rnd == 2 then
+      tear:AddTearFlags(TearFlags.TEAR_SPIRAL)
+    elseif rnd == 3 then
+      tear:AddTearFlags(TearFlags.TEAR_BIG_SPIRAL)
+    end
+  elseif poopVariant == 5 then -- black poop
+    tear:ChangeVariant(TearVariant.NEEDLE)
+    tear:AddTearFlags(TearFlags.TEAR_NEEDLE)
+  elseif poopVariant == 6 then -- rainbow poop
+    tear:AddTearFlags(TearFlags.TEAR_GLOW)
+    tear:AddTearFlags(TearFlags.TEAR_HOMING)
+  elseif poopVariant == 11 then -- charm poop
+    tear:ChangeVariant(TearVariant.BALLOON_BOMB)
+    tear:AddTearFlags(TearFlags.TEAR_CHARM)
+  else -- gigantic poop
+    tear:AddTearFlags(TearFlags.TEAR_PERSISTENT)
+  end
+  local playerData = PlayerUtils.GetPlayerData(player)
+
+  playerData.tearOrbit:add(player, tear)
+end
+
+local laserSize = {
+  [LaserVariant.LASER_NULL] = 0.15,
+  [LaserVariant.THICK_RED] = 0.25,
+  [LaserVariant.THIN_RED] = 0.15,
+  [LaserVariant.SHOOP] = 0.25,
+  [LaserVariant.PRIDE] = 0.25,
+  [LaserVariant.LIGHT_BEAM] = 0.25,
+  [LaserVariant.GIANT_RED] = 1,
+  [LaserVariant.TRACTOR_BEAM] = 0.15,
+  [LaserVariant.LIGHT_RING] = 0.25,
+  [LaserVariant.BRIM_TECH] = 0.25,
+  [LaserVariant.ELECTRIC] = 0.15,
+  [LaserVariant.THICKER_RED] = 0.5,
+  [LaserVariant.THICK_BROWN] = 0.25,
+  [LaserVariant.BEAST] = 2,
+  [LaserVariant.THICKER_BRIM_TECH] = 0.5,
+  [LaserVariant.GIANT_BRIM_TECH] = 1,
+}
+
+---@param player EntityPlayer
+---@param pos Vector
+---@param vel Vector
+---@param laserVariant number
+function PlayerUtils.FireLaserTear(player, pos, vel, laserVariant)
+  local amount = laserSize[laserVariant] or 0.15
+  log.Value("amount", amount)
+  local fakeLaser = player:FireTear(
+    pos,
+    vel,
+    false,
+    true,
+    true,
+    player,
+    amount
+  )
+
+  local playerData = PlayerUtils.GetPlayerData(player)
+  fakeLaser:AddTearFlags(TearFlags.TEAR_LUDOVICO)
+  fakeLaser.Scale = amount * 4
+  local sprite = fakeLaser:GetSprite()
+  sprite:Load("gfx/1000.113_brimstone ball.anm2", true)
+  sprite:Play("Idle", true)
+  sprite.Scale = Vector(0.8, 0.8) * math.min(amount, 8)
+  local orb = playerData.tearOrbit:add(player, fakeLaser)
+  orb.flags = orb.flags | Const.CustomFlags.TEAR_LUDOVICO | Const.CustomFlags.TEAR_TECH
+  orb.variant = laserVariant
+  return orb
+end
+
+local function roundToNearest45(angle)
+  local normalized = angle % 360
+  local rounded = math.floor((normalized + 22) / 45) * 45
+  return rounded % 360
+end
+
+---@param player EntityPlayer
+---@param orb Orbital<EntityOrbital>
+---@param angle number
+function PlayerUtils.FireLaserFromTear(player, orb, angle)
+  local timeout = (orb.variant == LaserVariant.THIN_RED) and 1 or laserSize[orb.variant] * 40
+  if orb.variant == LaserVariant.BEAST then
+    angle = roundToNearest45(angle)
+    local laser = EntityLaser.ShootAngle(
+      orb.variant,
+      orb.entity.Position,
+      angle,
+      timeout,
+      Vector(0, 0),
+      player
+    )
+    laser.DisableFollowParent = true
+    orb.variant = LaserVariant.GIANT_BRIM_TECH
+  end
+  local laser = EntityLaser.ShootAngle(
+    orb.variant,
+    orb.entity.Position,
+    angle,
+    timeout,
+    Vector(0, 0),
+    player
+  )
+  laser.DisableFollowParent = true
+  return laser
 end
 
 return PlayerUtils

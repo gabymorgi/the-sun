@@ -24,6 +24,8 @@ local Const = require("thesun-src.Const")
 ---@field GetHeadVector fun(player: EntityPlayer): Vector
 ---@field GetShootVector fun(player: EntityPlayer): Vector
 ---@field GetFlattenedOrbitPosition fun(player: EntityPlayer, angle: number, radius: number): Vector
+---@field GetSulfurLaserVariant fun(amount: number): LaserVariant
+---@field GetAbsorbedLaserVariant fun(laserVariant: LaserVariant): LaserVariant
 
 local Utils = {}
 
@@ -290,6 +292,38 @@ function Utils.GetFlattenedOrbitPosition(player, angle, radius)
   local y = math.sin(angle) * radius * 0.3 -- 1 circular, 0 flat
 
   return aim * x + perp * y
+end
+
+---@param amount number
+function Utils.GetSulfurLaserVariant(amount)
+  if amount <= 1 then
+    return LaserVariant.THICK_RED
+  elseif amount <= 2 then
+    return LaserVariant.BRIM_TECH
+  elseif amount <= 3 then
+    return LaserVariant.THICKER_RED
+  elseif amount <= 4 then
+    return LaserVariant.THICKER_BRIM_TECH
+  elseif amount <= 6 then
+    return LaserVariant.GIANT_RED
+  elseif amount <= 8 then
+    return LaserVariant.GIANT_BRIM_TECH
+  else
+    return LaserVariant.BEAST
+  end
+end
+
+---@param laserVariant LaserVariant
+function Utils.GetAbsorbedLaserVariant(laserVariant)
+  if laserVariant == LaserVariant.THIN_RED or laserVariant == LaserVariant.ELECTRIC then
+    return LaserVariant.THIN_RED
+  elseif laserVariant == LaserVariant.PRIDE or laserVariant == LaserVariant.THICK_BROWN then
+    return LaserVariant.THICK_BROWN
+  elseif laserVariant == LaserVariant.LIGHT_BEAM or laserVariant == LaserVariant.LIGHT_RING then
+    return LaserVariant.LIGHT_RING
+  else
+    return LaserVariant.THICK_RED
+  end
 end
 
 return Utils
