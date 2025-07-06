@@ -1,7 +1,7 @@
 ---@type Utils
-local Utils = include("thesun-src.utils")
+local Utils = require("thesun-src.Utils")
 ---@type Const
-local Const = include("thesun-src.Const")
+local Const = require("thesun-src.Const")
 
 if EID then
   local preDesc = {
