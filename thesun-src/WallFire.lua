@@ -1,12 +1,11 @@
-local log = include("log")
 ---@type Store
 local Store = require("thesun-src.Store")
 ---@type Const
 local Const = require("thesun-src.Const")
 ---@type Utils
-local Utils = include("thesun-src.Utils")
+local Utils = require("thesun-src.Utils") --
 ---@type PlayerUtils
-local PlayerUtils = include("thesun-src.PlayerUtils")
+local PlayerUtils = require("thesun-src.PlayerUtils") --
 
 local wallDirection = 0 -- 00 = left, 10 = right, 01 = top, 11 = down
 local PROJECTILE_SPAWN_OFFSET = 40
@@ -181,7 +180,8 @@ end
 function WallFire.WallShot(player)
   local spawnPos, direction, bulletTrain, wizOffset = GetWallSpawn(player)
   local playerData = PlayerUtils.GetPlayerData(player)
-  local velMagnitude = 4 * player.MoveSpeed   -- half of the player speed
+  local currentFloor = Const.game:GetLevel():GetAbsoluteStage()
+  local velMagnitude = 4 + currentFloor * 0.25
   local velocity = direction * velMagnitude
   for _ = 1, bulletTrain do
     WallFire.SpawnBulletWall(player, spawnPos, velocity)

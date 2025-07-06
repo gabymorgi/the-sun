@@ -1,13 +1,12 @@
-local log = include("log")
 ---@type Store
 local Store = require("thesun-src.Store")
 ---@type Const
-local Const = require("thesun-src.Const")
+local Const = require("thesun-src.Const") --
 ---@type Utils
-local Utils = include("thesun-src.Utils")
+local Utils = require("thesun-src.Utils")
 ---@type ChargeBar
-local ChargeBar = include("thesun-src.ChargeBar")
-local Orbit = include("thesun-src.Orbit")
+local ChargeBar = require("thesun-src.ChargeBar") --
+local Orbit = require("thesun-src.Orbit") --
 ---@type Orbit<EntityTear>
 local TearOrbit = Orbit.TearOrbit
 ---@type Orbit<EntityProjectile>
@@ -102,6 +101,7 @@ end
 
 ---@param player EntityPlayer
 function PlayerUtils.HandleNewRoom(player)
+  Store.roomCleared = false
   local absorbEffect = Utils.SpawnEntity(
     EntityType.ENTITY_EFFECT,
     ABSORB_ORBIT_VARIANT,
@@ -127,6 +127,11 @@ function PlayerUtils.HandleNewRoom(player)
 
   if Utils.IsPluto(player) then
     player:ClearCostumes()
+  elseif Utils.IsTheSun(player) then
+    -- mother chase
+    if player:HasCurseMistEffect() then
+      player:AddNullCostume(Const.HairCostume)
+    end
   end
 end
 

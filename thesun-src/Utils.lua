@@ -26,6 +26,7 @@ local Const = require("thesun-src.Const")
 ---@field GetFlattenedOrbitPosition fun(player: EntityPlayer, angle: number, radius: number): Vector
 ---@field GetSulfurLaserVariant fun(amount: number): LaserVariant
 ---@field GetAbsorbedLaserVariant fun(laserVariant: LaserVariant): LaserVariant
+---@field ReplaceTNTWithTrollBombs fun(): nil
 
 local Utils = {}
 
@@ -323,6 +324,28 @@ function Utils.GetAbsorbedLaserVariant(laserVariant)
     return LaserVariant.LIGHT_RING
   else
     return LaserVariant.THICK_RED
+  end
+end
+
+function Utils.ReplaceTNTWithTrollBombs()
+  local room = Game():GetRoom()
+
+  for i = 0, room:GetGridSize() - 1 do
+    local grid = room:GetGridEntity(i)
+
+    if grid and grid:GetType() == GridEntityType.GRID_TNT and grid.State < 4 then
+      log.Value("Replacing TNT", {
+        state = grid.State,
+      })
+      local pos = room:GetGridPosition(i)
+      -- room:RemoveGridEntity(i, 0, false)
+      Utils.SpawnEntity(
+        EntityType.ENTITY_BOMB,
+        BombVariant.BOMB_TROLL,
+        pos,
+        Vector.Zero
+      )
+    end
   end
 end
 

@@ -1,14 +1,13 @@
-local log = include("log")
 ---@type PlayerUtils
-local PlayerUtils = include("thesun-src.PlayerUtils")
+local PlayerUtils = require("thesun-src.PlayerUtils") --
 ---@type Const
 local Const = require("thesun-src.Const")
 ---@type Utils
-local Utils = include("thesun-src.Utils")
+local Utils = require("thesun-src.Utils") --
 ---@type Store
 local Store = require("thesun-src.Store")
 ---@type WormEffects
-local WormEffects = include("thesun-src.WormEffects")
+local WormEffects = require("thesun-src.WormEffects") --
 
 ---@class OrbitingTears
 ---@field DropRelease fun(player: EntityPlayer)

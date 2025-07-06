@@ -46,7 +46,7 @@ function theSunMod:PlayerInit(player)
     player:UsePill(PillEffect.PILLEFFECT_GULP, 0)
     cachePlayer = true
   elseif Utils.IsPluto(player) then
-    player.SizeMulti = Vector(0.5, 0.5)
+    -- player.SizeMulti = Vector(0.5, 0.5)
     player:ClearCostumes()
     player:AddTrinket(TrinketType.TRINKET_FRIENDSHIP_NECKLACE, true)
     player:UsePill(PillEffect.PILLEFFECT_GULP, 0)
@@ -218,8 +218,8 @@ function theSunMod:OnPeffectUpdate(player)
 
   local frameCount = Const.game:GetFrameCount()
   local room = Const.game:GetRoom()
+  local playerData = PlayerUtils.GetPlayerData(player)
   if not room:IsClear() or Isaac.CountEnemies() > 0 then
-    local playerData = PlayerUtils.GetPlayerData(player)
     if player.FireDelay <= 0 then
       if player:HasCollectible(CollectibleType.COLLECTIBLE_KIDNEY_STONE) then
         if playerData.kidneyStoneFrame < frameCount then
@@ -277,6 +277,10 @@ function theSunMod:OnPeffectUpdate(player)
       end
     end
   else
+    if not Store.roomCleared then
+      Utils.ReplaceTNTWithTrollBombs()
+      Store.roomCleared = true
+    end
     for hash, proj in pairs(Store.WallProjectiles) do
       proj:Die()
       Store.WallProjectiles[hash] = nil

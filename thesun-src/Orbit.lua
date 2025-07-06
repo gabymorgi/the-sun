@@ -1,8 +1,7 @@
-local log = include("log")
 ---@type Utils
-local Utils = include("thesun-src.utils")
+local Utils = require("thesun-src.Utils") --
 ---@type Const
-local Const = include("thesun-src.Const")
+local Const = require("thesun-src.Const") --
 ---@type Store
 local Store = require("thesun-src.Store")
 

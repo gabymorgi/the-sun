@@ -3,6 +3,7 @@
 ---@field WallProjectiles Dict<EntityProjectile>
 ---@field prismCachedCount number
 ---@field releasedTears Dict<{ tear: EntityTear, velocity: Vector, expirationFrame: number, turnSprite: boolean }>
+---@field roomCleared boolean
 
 local Store = {}
 
@@ -13,5 +14,6 @@ Store.WallProjectiles = {}
 ---@type number
 Store.prismCachedCount = 0
 Store.releasedTears = {}
+Store.roomCleared = false
 
 return Store

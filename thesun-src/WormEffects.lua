@@ -1,6 +1,5 @@
-local log = include("log")
 ---@type Const
-local Const = include("thesun-src.Const")
+local Const = require("thesun-src.Const") --
 
 -- code to calculate steps
 
