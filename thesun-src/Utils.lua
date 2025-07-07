@@ -334,17 +334,17 @@ function Utils.ReplaceTNTWithTrollBombs()
     local grid = room:GetGridEntity(i)
 
     if grid and grid:GetType() == GridEntityType.GRID_TNT and grid.State < 4 then
-      log.Value("Replacing TNT", {
-        state = grid.State,
-      })
       local pos = room:GetGridPosition(i)
       -- room:RemoveGridEntity(i, 0, false)
-      Utils.SpawnEntity(
-        EntityType.ENTITY_BOMB,
-        BombVariant.BOMB_TROLL,
-        pos,
-        Vector.Zero
-      )
+      Utils.SpawnEntity(EntityType.ENTITY_BOMB, BombVariant.BOMB_TROLL, pos, Vector.Zero)
+    end
+  end
+
+  local ents = Isaac.FindByType(EntityType.ENTITY_MOVABLE_TNT)
+
+  for _, entity in ipairs(ents) do
+    if (entity.HitPoints > 0.9) then
+      Utils.SpawnEntity(EntityType.ENTITY_BOMB, BombVariant.BOMB_TROLL, entity.Position, Vector.Zero)
     end
   end
 end

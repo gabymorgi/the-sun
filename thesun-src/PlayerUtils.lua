@@ -285,7 +285,6 @@ local laserSize = {
 ---@param laserVariant number
 function PlayerUtils.FireLaserTear(player, pos, vel, laserVariant)
   local amount = laserSize[laserVariant] or 0.15
-  log.Value("amount", amount)
   local fakeLaser = player:FireTear(
     pos,
     vel,
@@ -302,7 +301,7 @@ function PlayerUtils.FireLaserTear(player, pos, vel, laserVariant)
   local sprite = fakeLaser:GetSprite()
   sprite:Load("gfx/1000.113_brimstone ball.anm2", true)
   sprite:Play("Idle", true)
-  sprite.Scale = Vector(0.8, 0.8) * math.min(amount, 8)
+  sprite.Scale = Vector(0.8, 0.8) * math.min(amount, 1.1)
   local orb = playerData.tearOrbit:add(player, fakeLaser)
   orb.flags = orb.flags | Const.CustomFlags.TEAR_LUDOVICO | Const.CustomFlags.TEAR_TECH
   orb.variant = laserVariant

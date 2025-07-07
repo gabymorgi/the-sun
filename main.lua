@@ -1,7 +1,6 @@
 ---@alias EntityOrbital EntityTear | EntityProjectile | EntityEffect
 ---@class Dict<T>: { [number]: T }
 
-local log = include("log")
 include("thesun-src.Eid")
 ---@type Store
 local Store = require("thesun-src.Store")
