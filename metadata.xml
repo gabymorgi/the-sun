@@ -1,8 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
 <metadata>
-	<name>the-sun</name>
-	<directory>the-sun</directory>
-	<description/>
-	<version>1.0</version>
-	<visibility/>
-</metadata>
+    <name>The Orbits of Asterogues</name>
+    <directory>the orbits of asterogues</directory>
+    <id>3520328888</id>
+    <description>[b]The Orbits of Asterogues[/b] introduces two brand new characters inspired by [i]Asterogues[/i]!
+Absorb projectiles, master orbital combat, and unleash devastating meteor storms.
+Includes unique interactions and full [b]EID[/b] support!
 
+[h1]🌌 Overview[/h1]
+Instead of shooting tears normally, these characters manipulate [b]orbital tears[/b]
+Using gravitational powers, they can absorb enemy projectiles and other hazards into orbit and return them back with deadly force.
+
+[h1]☀️ The Sun[/h1]
+
+The Sun is the embodiment of strength and stability. Unshaken by chaos, he:
+
+[list]
+[][b]Floats[/b] freely over obstacles from the start.
+[]Is [b]immune to wall-fired projectiles[/b] — allowing him to calmly gather ammunition.
+[]Maintains a [b]perfectly stable orbit[/b]: absorbed projectiles stay with him indefinitely.
+[]Can [b]control the orbit radius[/b] using the fire buttons.
+[/list]
+
+The Sun is perfect for players who like preparation before confrontation — collect your orbiting meteors, then strike at the perfect moment.
+
+[h1]🪐 Pluto[/h1]
+
+After being cast out from the solar system, Pluto has returned — small, angry, and unstoppable.
+
+[list]
+[]He [b]Cannot fly[/b]
+[]Is [b]vulnerable[b/] to wall-fired projectiles.
+[]Starts with an aura that [b]repels enemy projectiles[/b].
+[]His [b]weaker gravitational field[/b] causes absorbed projectiles to eventually drift away if unused for too long.
+[]Can [b]launch orbitals directly at enemies[/b] using the fire buttons.
+[/list]
+
+Pluto is fragile but deadly — a precise slingshot of destruction for skilled players who enjoy high-risk, high-reward gameplay.
+
+[h1]✨ Extra Features[/h1]
+
+Full [b]EID (External Item Descriptions)[/b] support — see custom interactions directly in-game.
+
+[h1]👍 Support the Mod![/h1]
+
+If you enjoyed [b]The Orbits of Asterogues[/b],
+please consider [b]rating it[/b] and [b]adding it to your favorites[/b]!
+Also, check out the original game on Steam: [url=https://store.steampowered.com/app/2083240/Asterogues/]Asterogues[/url]
+
+[h1]🔗 Links[/h1]
+
+[b]GitHub Repository:[/b] [url=https://github.com/gabymorgi/theOrbitsOfAsterogues]The Orbits of Asterogues[/url]
+</description>
+    <version>1.1</version>
+    <visibility>Private</visibility>
+    <tag id="Player Characters"/>
+</metadata>
