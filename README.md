@@ -1,10 +1,22 @@
 # The Orbits of Asterogues
 
-The Orbits of Asterogue brings two unique characters to The Binding of Isaac: Repentance, inspired by the cosmic roguelike Asterogues.
+**The Orbits of Asterogues** introduces two brand new characters inspired by Asterogues!
+Absorb projectiles, master orbital combat, and unleash devastating meteor storms.
+Includes unique interactions and full **EID** support!
 
-Instead of shooting normally, these characters manipulate orbital projectiles — meteors that spawn from the edges of the room. Using gravitational powers, they can absorb these and enemy bullets, storing them in orbit and launching them back with deadly force.
+## 🌌 Overview
+
+Instead of shooting tears normally, these characters manipulate **orbital tears**
+Using gravitational powers, they can absorb enemy projectiles and other hazards into orbit and return them back with deadly force.
 
 ## Installation
+
+### Steam
+
+subscribe to the mod here:
+https://steamcommunity.com/sharedfiles/filedetails/?id=3520328888
+
+### Locally
 
 1. Download the mod files.
 2. Extract or copy the contents into your Isaac mods folder:
@@ -15,38 +27,40 @@ Instead of shooting normally, these characters manipulate orbital projectiles �
 
 ## Characters
 
-### The Sun – The Core of Power
+### ☀️ The Sun
 
 The Sun is the embodiment of strength and stability. Unshaken by chaos, he:
 
-- Floats freely over obstacles from the start.
-
-- Is immune to wall projectiles, allowing him to calmly gather ammunition.
-
-- Can absorb enemy projectiles, but his weak gravitational field causes orbiting tears to eventually drift away if unused for too long.
-
-- Use the fire buttons to expand or contract the orbit radius, adjusting for defense or precision.
+- **Floats** freely over obstacles from the start.
+- Is **immune to wall-fired projectiles** — allowing him to calmly gather ammunition.
+- Maintains a **perfectly stable orbit**: absorbed projectiles stay with him indefinitely.
+- Can **control the orbit radius** using the fire buttons.
 
 The Sun is perfect for players who like preparation before confrontation — collect your orbiting meteors, then strike at the perfect moment.
 
-### Pluto – The Forgotten Rebel
+### 🪐 Pluto
 
 After being cast out from the solar system, Pluto has returned — small, angry, and unstoppable.
 
-- His hitbox is 50% smaller, making him much harder to hit.
-
-- His orbit is perfectly stable: absorbed projectiles stay with him indefinitely until launched.
-
-- He cannot fly, and unlike The Sun, wall projectiles can hurt him.
-
-- Use the fire buttons to release projectiles, firing them at enemies from his orbit.
+He **cannot fly**
+Is **vulnerable** to wall-fired projectiles.
+Starts with an aura that **repels enemy projectiles**.
+His **weaker gravitational field** causes absorbed projectiles to eventually drift away if unused for too long.
+Can **launch orbitals directly at enemies** using the fire buttons.
 
 Pluto is fragile but deadly — a precise slingshot of destruction for skilled players who enjoy high-risk, high-reward gameplay.
 
-## Extra Features
+## ✨ Extra Features
 
-- Over 20 custom synergies with existing items — some wild, some subtle, all fun.
+Full **EID (External Item Descriptions)** support — see custom interactions directly in-game.
 
-## Compatibility
+## 👍 Support the Mod!
 
-- Full EID (External Item Descriptions) integration: view synergy effects directly in-game.
+If you enjoyed The Orbits of Asterogues,
+please consider rating it and adding it to your favorites!
+Also, check out the original game on Steam: [Asterogues](https://store.steampowered.com/app/2083240/Asterogues/)
+
+## 🔗 Links
+
+Wrokshop page: [The Orbits of Asterogues](https://steamcommunity.com/sharedfiles/filedetails/?id=3520328888)
+Original game: [Asterogues](https://store.steampowered.com/app/2083240/Asterogues/)
