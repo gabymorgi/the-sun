@@ -588,7 +588,7 @@ function OrbitingTears.CheckOrbitingTearCollisions(player, tearOrbit, orbitRadiu
   local sorted = {}
   for _, orbital in pairs(tearOrbit.list) do
     local pre = orbital.angle
-    orbital.angle = orbital.angle % Const.TWO_PI
+    orbital.angle = orbital.angle % Const.TAU
     table.insert(sorted, orbital)
   end
 

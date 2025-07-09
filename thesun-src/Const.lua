@@ -8,7 +8,7 @@
 ---@field AbsorbRangeSquared number
 ---@field game Game
 ---@field rng RNG
----@field TWO_PI number
+---@field TAU number
 ---@field FPS number
 ---@field CustomFlags any
 
@@ -23,7 +23,7 @@ Const.AbsorbRange = 80
 Const.AbsorbRangeSquared = Const.AbsorbRange * Const.AbsorbRange
 Const.game = Game()
 Const.rng = RNG()
-Const.TWO_PI = math.pi * 2
+Const.TAU = math.pi * 2
 Const.FPS = 25
 Const.CustomFlags = {
   TEAR_SQUARE = 1 << 0,
